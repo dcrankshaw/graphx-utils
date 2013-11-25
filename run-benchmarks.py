@@ -1,13 +1,23 @@
 #!/usr/bin/env python
 import urllib2
+import os
 import re
 import subprocess
+from subprocess import Popen, PIPE
 import time
 import traceback
+import sys
+import threading
+# import config
 
 
 MAX_RETRIES = 3
 NUM_SLAVES = 16
+GRAPHX_HOME_DIR = '/root/graphx'
+GRAPHX_CONF_DIR = '%s/conf/' % GRAPHX_HOME_DIR
+RESULTS_DIR = '/root/results'
+
+sbt_cmd = "sbt/sbt"
 
 def countAliveSlaves(master):
   url = 'http://' + master + ':8080'
@@ -32,47 +42,95 @@ def extract_ip_and_pid(line):
   return (ip_str, pid)
 
 
-  # need to extract ip address, pid, kill: ssh root@ip_address "kill -TERM pid"
 
-def restart_cluster(master, recompile='no', allowed_attempts=MAX_RETRIES):
+# Return a command which copies the supplied directory to the given host.
+def make_rsync_cmd(dir_name, host):
+    return ('rsync --delete -e "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5" -az "%s/" '
+        '"%s:%s"') % (dir_name, host, os.path.abspath(dir_name))
+
+# Return a command running cmd_name on host with proper SSH configs.
+def make_ssh_cmd(cmd_name, host):
+    return "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 %s '%s'" % (host, cmd_name)
+
+def run_cmd(cmd, exit_on_fail=True):
+    if cmd.find(";") != -1:
+        print("***************************")
+        print("WARNING: the following command contains a semicolon which may cause non-zero return "
+            "values to be ignored. This isn't necessarily a problem, but proceed with caution!")
+    print(cmd)
+    return_code = Popen(cmd, stdout=sys.stderr, shell=True).wait()
+    if exit_on_fail:
+        if return_code != 0:
+            print "The following shell command finished with a non-zero returncode (%s): %s" % (
+                return_code, cmd)
+            sys.exit(-1)
+    return return_code
+
+# Ensures that no executors are running on Spark slaves. Executors can continue to run for some
+# time after a shutdown signal is given due to cleaning up temporary files.
+def ensure_spark_stopped_on_slaves(slaves):
+    stop = False
+    while not stop:
+        cmd = "ps -ef |grep -v grep |grep ExecutorBackend"
+        ret_vals = map(lambda s: run_cmd(make_ssh_cmd(cmd, s), False), slaves)
+        if 0 in ret_vals:
+            print "GraphX is still running on some slaves ... sleeping for 10 seconds"
+            time.sleep(10)
+        else:
+            stop = True
+
+# Run several commands in parallel, waiting for them all to finish.
+# Expects an array of tuples, where each tuple consists of (command_name, exit_on_fail).
+def run_cmds_parallel(commands):
+    threads = []
+    for (cmd_name, exit_on_fail) in commands:
+        thread = threading.Thread(target=run_cmd, args=(cmd_name, exit_on_fail))
+        thread.start()
+        threads = threads + [thread]
+    for thread in threads:
+        thread.join()
+
+def try_restart_cluster(slaves, recompile=True):
+  # If a cluster is already running from the Spark EC2 scripts, try shutting it down.
+  run_cmd("%s/bin/stop-all.sh" % GRAPHX_HOME_DIR)
+  ensure_spark_stopped_on_slaves(slaves)
+  time.sleep(5)
+  if recompile:
+    print 'Recompiling...'
+    os.chdir(GRAPHX_HOME_DIR)
+    run_cmd("%s assembly" % sbt_cmd)
+  run_cmds_parallel([(make_rsync_cmd(GRAPHX_HOME_DIR, slave), True) for slave in slaves])
+  run_cmd("%s/bin/start-all.sh" % GRAPHX_HOME_DIR)
+
+
+def restart_cluster(master, slaves, recompile=True, allowed_attempts=MAX_RETRIES):
   print 'Restarting Cluster'
   success = False
   retries = 0
   while (not success and retries < allowed_attempts):
-    # rc = subprocess.call(['/root/graphx/bin/rebuild-graphx', recompile])
-    rc = subprocess.call(['rebuild-graphx', recompile])
-    # proc = subprocess.Popen(['rebuild-graphx', recompile], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    # # err is redundant here
-    # (out, err) = proc.communicate()
-    # print out
-
-    # # rc = -1
-    # for line in out.splitlines():
-    #   if 'process' in line:
-    #     print 'FINDING PID:\t' + line
-    #     (ip, pid) = extract_ip_and_pid(line)
-    #     rc = subprocess.call(['ssh', '-oStrictHostKeyChecking=no', 'root@' + ip, "'kill -9 " + str(pid) + "'"])
-    #     rc = subprocess.call(['kill_remote_proc.sh', ip, str(pid)])
-
+    try_restart_cluster(slaves, recompile)
     (aliveCount, deadCount) = countAliveSlaves(master)
     success = (aliveCount == NUM_SLAVES and deadCount == 0)
     retries += 1
   if not success:
     raise Exception('Cluster could not be resurrected')
   else:
+    print 'Cluster successfully restarted'
     return retries
 
 def get_master_url():
-  master = ''
+  # master = ''
   # find URL
   with open('/root/spark-ec2/ec2-variables.sh', 'r') as vars:
     for line in vars:
       if 'MASTERS' in line:
-        master = line.split('=')[1].strip()[1:-1]
-        break
-  return master
+        # master = line.split('=')[1].strip()[1:-1]
+        return line.split('=')[1].strip()[1:-1]
+        # break
+  # return master
 
 def run_algo(master,
+             slaves,
              algo='pagerank',
              epart=128,
              data='soc-LiveJournal1.txt',
@@ -97,7 +155,7 @@ def run_algo(master,
   if alive != NUM_SLAVES:
     print alive, NUM_SLAVES
     # num_restarts = restart_cluster(master, recompile='no', allowed_attempts=3)
-    num_restarts = restart_cluster(master, allowed_attempts=3)
+    num_restarts = restart_cluster(master, slaves, recompile=False, allowed_attempts=3)
 
   start = time.time()
   proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -129,16 +187,20 @@ def run_algo(master,
   return (command_string, gx_runtime, full_runtime, num_restarts)
 
 
-def run_part_benchmark(master, strat, timing, errors):
+def run_part_benchmark(master, slaves, strat):
+  timing = ''
+  errors = ''
   for i in range(5):
-    time.sleep(50)
-    restart_cluster(master, recompile='no', allowed_attempts=3)
+    # time.sleep(50)
+    restart_cluster(master, slaves, recompile=False, allowed_attempts=3)
     retries = 0
     success = False
     while (not success and retries < MAX_RETRIES):
       try:
-        results = run_algo(master, algo='pagerank', iters=20, strategy=strat)
-        print strat, i, results
+        results = run_algo(master, slaves, algo='pagerank', iters=20, strategy=strat)
+        gx_runtime = results[1]
+        full_runtime = results[2]
+        print strat, i, gx_runtime, full_runtime
         success = True
       except Exception as e:
         errors += '\n' + str(e) +'\n'
@@ -146,7 +208,7 @@ def run_part_benchmark(master, strat, timing, errors):
         print strat, i
         traceback.print_exc()
     if success:
-      timing += str(results)
+      timing += '\n' + str(results) + '\n'
       
     else:
       errors += 'BENCHMARK FAILED ON TRIAL: ' + str(i)
@@ -156,19 +218,26 @@ def run_part_benchmark(master, strat, timing, errors):
 
 def main():
   master = get_master_url()
-  print master
-  timing = ''
-  error_output = ''
-  strategies = ['EdgePartition2D', 'RandomVertexCut', 'EdgePartition1D']
-  restart_cluster(master, recompile='', allowed_attempts=3)
-  for strat in strategies:
-    (timing, error_output) = run_part_benchmark(master, strat, timing, error_output)
+  # Get a list of slaves by parsing the slaves file in SPARK_CONF_DIR.
+  slaves_file_raw = open("%s/slaves" % GRAPHX_CONF_DIR, 'r').read().split("\n")
+  slaves_list = filter(lambda x: not x.startswith("#") and not x is "", slaves_file_raw)
 
-  now = str(int(time.clock()))
-  with open('/root/results/timing-' + now, 'w') as t:
-    t.write(timing)
-  with open('/root/results/errors-' + now, 'w') as e:
-    e.write(error_output)
+  print master
+  # timing = ''
+  # error_output = ''
+  strategies = ['EdgePartition2D', 'RandomVertexCut', 'EdgePartition1D']
+  restart_cluster(master, slaves_list, recompile=True, allowed_attempts=3)
+  format_str = '%Y-%m-%d-%H-%M-%S'
+  now = time.strftime(format_str, time.localtime())
+  for strat in strategies:
+    # timing = ''
+    # error_output = ''
+    # (timing, error_output) = run_part_benchmark(master, slaves_list, strat, timing, error_output)
+    (timing, error_output) = run_part_benchmark(master, slaves_list, strat)
+    with open('%s/timing-%s' % (RESULTS_DIR, now), 'a') as t:
+      t.write(timing)
+    with open('%s/error-%s' % (RESULTS_DIR, now), 'a') as e:
+      e.write(error_output)
 
 
 
