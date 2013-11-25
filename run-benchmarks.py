@@ -135,17 +135,30 @@ def run_algo(master,
              epart=128,
              data='soc-LiveJournal1.txt',
              iters=5,
-             strategy='RandomVertexCut'):
+             strategy='RandomVertexCut',
+             dynamic=False):
 
   cls = 'org.apache.spark.graph.Analytics'
-  command = ['/root/graphx/run-example',
-             cls,
-             'spark://' + master + ':7077',
-             algo,
-             'hdfs://' + master + ':9000/' + data,
-             '--numIter=' + str(iters),
-             '--numEPart=' + str(epart),
-             '--partStrategy=' + strategy]
+  command = None
+  if dynamic:
+    command = ['/root/graphx/run-example',
+               cls,
+               'spark://' + master + ':7077',
+               algo,
+               'hdfs://' + master + ':9000/' + data,
+               '--dynamic=true',
+               '--numEPart=' + str(epart),
+               '--partStrategy=' + strategy]
+  else:
+    command = ['/root/graphx/run-example',
+               cls,
+               'spark://' + master + ':7077',
+               algo,
+               'hdfs://' + master + ':9000/' + data,
+               '--numIter=' + str(iters),
+               '--numEPart=' + str(epart),
+               '--partStrategy=' + strategy]
+    
 
   num_restarts = 0
   command_string = ' '.join(command)
@@ -187,17 +200,17 @@ def run_algo(master,
   return (command_string, gx_runtime, full_runtime, num_restarts)
 
 
-def run_part_benchmark(master, slaves, strat):
+def run_test(master, slaves, strat, algorithm, data, dynamic=False, num_iters=20, restart=True):
   timing = ''
   errors = ''
   for i in range(5):
-    # time.sleep(50)
-    restart_cluster(master, slaves, recompile=False, allowed_attempts=3)
+    if restart:
+      restart_cluster(master, slaves, recompile=False, allowed_attempts=3)
     retries = 0
     success = False
     while (not success and retries < MAX_RETRIES):
       try:
-        results = run_algo(master, slaves, algo='pagerank', iters=20, strategy=strat)
+        results = run_algo(master, slaves, algo=algorithm, iters=num_iters, data=data, strategy=strat, dynamic=dynamic)
         gx_runtime = results[1]
         full_runtime = results[2]
         print strat, i, gx_runtime, full_runtime
@@ -216,38 +229,44 @@ def run_part_benchmark(master, slaves, strat):
   return (timing, errors)
       
 
+def run_strats_benchmark(master, slaves):
+  strategies = ['EdgePartition2D', 'RandomVertexCut', 'EdgePartition1D']
+  restart_cluster(master, slaves, recompile=True, allowed_attempts=3)
+  format_str = '%Y-%m-%d-%H-%M-%S'
+  now = time.strftime(format_str, time.localtime())
+  for strat in strategies:
+    (timing, error_output) = run_test(master, slaves, strat, 'pagerank', 'soc-LiveJournal1.txt', num_iters=20, restart=False)
+    bm_str = 'part_strats_benchmark'
+    with open('%s/%s_timing-%s' % (RESULTS_DIR, bm_str, now), 'a') as t:
+      t.write(timing)
+    with open('%s/%s_error-%s' % (RESULTS_DIR, bm_str, now), 'a') as e:
+      e.write(error_output)
+    # restart cluster after each strategy
+    restart_cluster(master, slaves, recompile=False, allowed_attempts=3)
+
+def run_dynamic_algos_benchmark(master, slaves):
+  restart_cluster(master, slaves, recompile=True, allowed_attempts=3)
+  format_str = '%Y-%m-%d-%H-%M-%S'
+  now = time.strftime(format_str, time.localtime())
+  strat = 'EdgePartition2D'
+  algorithms = ['triangles', 'pagerank', 'cc']
+  for algo in algorithms:
+    (timing, error_output) = run_test(master, slaves, strat, algo, 'soc-LiveJournal1.txt', dynamic=True)
+    bm_str = 'dynamic_algos_benchmark'
+    with open('%s/%s_timing-%s' % (RESULTS_DIR, bm_str, now), 'a') as t:
+      t.write(timing)
+    with open('%s/%s_error-%s' % (RESULTS_DIR, bm_str, now), 'a') as e:
+      e.write(error_output)
+
 def main():
   master = get_master_url()
   # Get a list of slaves by parsing the slaves file in SPARK_CONF_DIR.
   slaves_file_raw = open("%s/slaves" % GRAPHX_CONF_DIR, 'r').read().split("\n")
   slaves_list = filter(lambda x: not x.startswith("#") and not x is "", slaves_file_raw)
 
-  print master
-  # timing = ''
-  # error_output = ''
-  strategies = ['EdgePartition2D', 'RandomVertexCut', 'EdgePartition1D']
-  restart_cluster(master, slaves_list, recompile=True, allowed_attempts=3)
-  format_str = '%Y-%m-%d-%H-%M-%S'
-  now = time.strftime(format_str, time.localtime())
-  for strat in strategies:
-    # timing = ''
-    # error_output = ''
-    # (timing, error_output) = run_part_benchmark(master, slaves_list, strat, timing, error_output)
-    (timing, error_output) = run_part_benchmark(master, slaves_list, strat)
-    with open('%s/timing-%s' % (RESULTS_DIR, now), 'a') as t:
-      t.write(timing)
-    with open('%s/error-%s' % (RESULTS_DIR, now), 'a') as e:
-      e.write(error_output)
+  run_dynamic_algos_benchmark(master, slaves_list)
+  run_strats_benchmark(master, slaves_list)
 
-
-
-  # try:
-  #   results = run_algo(master, iters=2)
-  #   print results
-  # except Exception as e:
-  #   # TODO something more intelligent, probably retry test
-  #   print e
-  # (alive, dead) = countAliveSlaves(master)
 
 if __name__ == '__main__':
   main()
