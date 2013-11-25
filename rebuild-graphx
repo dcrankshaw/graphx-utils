@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+~/graphx/bin/stop-all.sh
+if [ -z "$1" ]
+  then
+    cd ~/graphx; sbt/sbt assembly;
+fi
+~/spark-ec2/copy-dir --delete ~/graphx/
+# sleep 30
+~/graphx/bin/start-all.sh
+
+
+
