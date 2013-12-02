@@ -16,6 +16,7 @@ NUM_SLAVES = 16
 GRAPHX_HOME_DIR = '/root/graphx'
 GRAPHX_CONF_DIR = '%s/conf/' % GRAPHX_HOME_DIR
 RESULTS_DIR = '/root/results'
+DATASET = 'uk0705'
 
 sbt_cmd = "sbt/sbt"
 
@@ -231,11 +232,12 @@ def run_test(master, slaves, strat, algorithm, data, dynamic=False, num_iters=20
 
 def run_strats_benchmark(master, slaves):
   strategies = ['EdgePartition2D', 'RandomVertexCut', 'EdgePartition1D']
+  strategies = ['EdgePartition2D', 'RandomVertexCut', 'EdgePartition1D']
   restart_cluster(master, slaves, recompile=True, allowed_attempts=3)
   format_str = '%Y-%m-%d-%H-%M-%S'
   now = time.strftime(format_str, time.localtime())
   for strat in strategies:
-    (timing, error_output) = run_test(master, slaves, strat, 'pagerank', 'soc-LiveJournal1.txt', num_iters=20, restart=False)
+    (timing, error_output) = run_test(master, slaves, strat, 'pagerank', DATASET, num_iters=20, restart=True)
     bm_str = 'part_strats_benchmark'
     with open('%s/%s_timing-%s' % (RESULTS_DIR, bm_str, now), 'a') as t:
       t.write(timing)
@@ -251,7 +253,7 @@ def run_dynamic_algos_benchmark(master, slaves):
   strat = 'EdgePartition2D'
   algorithms = ['triangles', 'pagerank', 'cc']
   for algo in algorithms:
-    (timing, error_output) = run_test(master, slaves, strat, algo, 'soc-LiveJournal1.txt', dynamic=True)
+    (timing, error_output) = run_test(master, slaves, strat, algo, DATASET, dynamic=True, restart=True)
     bm_str = 'dynamic_algos_benchmark'
     with open('%s/%s_timing-%s' % (RESULTS_DIR, bm_str, now), 'a') as t:
       t.write(timing)
