@@ -1,6 +1,7 @@
 #!/bin/bash
 
 yum install -y openmpi-devel zlib-devel cmake
+ln -s /usr/lib64/openmpi/bin/* /usr/bin/.
 ~/ephemeral-hdfs/bin/slaves.sh ln -s /usr/lib64/openmpi/bin/* /usr/bin/.
 ~/ephemeral-hdfs/bin/slaves.sh yum install -y openmpi-devel zlib-devel cmake
 git clone https://github.com/jegonzal/graphlab.git /mnt/graphlab
