@@ -4,56 +4,54 @@
 TIME=/usr/bin/time
 NODES=16
 
-NUMTRIALS=10
+NUMTRIALS=1
 NOW=$(date)
 # SECONDS=$(date +%s)
 DATE=`date "+%Y%m%d.%H.%M.%S"`
 # SECONDS=$(date '+%H_%M')
-OUTPUT_DIR=/root/benchmarking_conn_comp
+OUTPUT_DIR=/root/final_cc_numbers
 mkdir -p $OUTPUT_DIR
 
 command=~/graphx/bin/run-example
 class=org.apache.spark.graphx.lib.Analytics
+# DATASET="livejournal_graph_splits/part*"
 DATASET="twitter_graph_splits/part*"
 # DATASET="livejournal_graph"
 NUMPARTS=64
 
 export HDFS=hdfs://$MASTERS:9000
-# GRAPHX_CC_COMMAND="$command $class spark://$MASTERS:7077 cc \
-#   $HDFS/$DATASET \
-#   --partStrategy=RandomVertexCut \
-#   --numEPart=$NUMPARTS \
-#   --dynamic=true"
 
-# GRAPHX_CC_COMMAND="$command $class spark://$MASTERS:7077 cc \
-#   $HDFS/$DATASET \
-#   --numEPart=$NUMPARTS \
-#   --dynamic=true"
-#
-# GRAPHX_CC_FILE=$OUTPUT_DIR/graphx_cc_results_"$NUMPARTS"parts_$DATE
-# echo $GRAPHX_CC_FILE
-# echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_CC_FILE
-# echo $GRAPHX_CC_COMMAND | tee -a $GRAPHX_CC_FILE
-# ~/graphx/sbin/stop-all.sh &> /dev/null
-# sleep 10
-# ~/graphx/sbin/stop-all.sh &> /dev/null
-# ~/graphx/sbin/start-all.sh &> /dev/null
-# sleep 10
-# for xx in $(seq 1 $NUMTRIALS)
-# do
-#   # hadoop dfs -rmr /cc_del
-#   $TIME -f "TOTAL_TIMEX: %e seconds" $GRAPHX_CC_COMMAND &>> $GRAPHX_CC_FILE
-#   # hadoop dfs -rmr /cc_del
-#   echo Finished iter $xx
-#   sleep 10
-#   ~/graphx/sbin/stop-all.sh &> /dev/null
-#   sleep 10
-#   ~/graphx/sbin/stop-all.sh &> /dev/null
-#   ~/graphx/sbin/start-all.sh &> /dev/null
-#   sleep 10
-#   # sleep 60
-# done
-# exit
+GRAPHX_CC_COMMAND="$command $class spark://$MASTERS:7077 cc \
+  $HDFS/$DATASET \
+  --numEPart=$NUMPARTS \
+  --dynamic=true"
+
+GRAPHX_CC_FILE=$OUTPUT_DIR/graphx_cc_results_"$NUMPARTS"parts_$DATE
+echo $GRAPHX_CC_FILE
+echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_CC_FILE
+echo $GRAPHX_CC_COMMAND | tee -a $GRAPHX_CC_FILE
+~/graphx/sbin/stop-all.sh &> /dev/null
+sleep 10
+~/graphx/sbin/stop-all.sh &> /dev/null
+~/graphx/sbin/start-all.sh &> /dev/null
+sleep 10
+for xx in $(seq 1 $NUMTRIALS)
+do
+  # hadoop dfs -rmr /cc_del
+  $TIME -f "TOTAL_TIMEX: %e seconds" $GRAPHX_CC_COMMAND &>> $GRAPHX_CC_FILE
+  # hadoop dfs -rmr /cc_del
+  echo Finished iter $xx
+  sleep 10
+  ~/graphx/sbin/stop-all.sh &> /dev/null
+  sleep 10
+  ~/graphx/sbin/stop-all.sh &> /dev/null
+  ~/graphx/sbin/start-all.sh &> /dev/null
+  sleep 10
+  # sleep 60
+done
+exit
+
+echo -e "\n\n FINISHED GRAPHX\n\n" | tee ~/GRAPHX_DONE
 
 # 
 # # for xx in $(seq 1 $NUMTRIALS)
@@ -76,7 +74,7 @@ export HDFS=hdfs://$MASTERS:9000
 #     CLASSPATH=$(hadoop classpath) $GRAPHLAB/release/toolkits/graph_analytics/undirected_triangle_count \
 #     --graph=$HDFS/twitter_splits --format=snap --ncpus=8"
 # 
-GL_DATASET="twitter_graph_splits"
+GL_DATASET="livejournal_graph_splits"
 GL_CC_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
     CLASSPATH=$(hadoop classpath) $GRAPHLAB/release/toolkits/graph_analytics/connected_component \
     --graph=$HDFS/$GL_DATASET --format=snap --ncpus=8 \
@@ -94,19 +92,20 @@ GL_CC_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
 # 
 # 
 # connected components
-# GL_CC_FILE=$OUTPUT_DIR/graphlab_cc_results_$DATE
-# echo $GL_CC_FILE
-# echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GL_CC_FILE
-# echo $GL_CC_COMMAND | tee -a $GL_CC_FILE
-# for xx in $(seq 1 $NUMTRIALS)
-# do
-#   hadoop dfs -rmr /cc_del* &> /dev/null
-#   $TIME -f "TOTAL_TIMEX: %e seconds" $GL_CC_COMMAND 2>&1 | tee -a $GL_CC_FILE
-#   hadoop dfs -rmr /cc_del* &> /dev/null
-#   echo Finished iter $xx
-#   sleep 30
-# done
-# exit
+GL_CC_FILE=$OUTPUT_DIR/graphlab_cc_results_$DATE
+echo $GL_CC_FILE
+echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GL_CC_FILE
+echo $GL_CC_COMMAND | tee -a $GL_CC_FILE
+for xx in $(seq 1 $NUMTRIALS)
+do
+  hadoop dfs -rmr /cc_del* &> /dev/null
+  $TIME -f "TOTAL_TIMEX: %e seconds" $GL_CC_COMMAND 2>&1 | tee -a $GL_CC_FILE
+  hadoop dfs -rmr /cc_del* &> /dev/null
+  echo Finished iter $xx
+  sleep 30
+done
+
+echo -e "\n\n FINISHED GRAPHLAB\n\n" | tee ~/GRAPHLAB_DONE
 
 
 # 
@@ -124,7 +123,7 @@ GL_CC_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
 # ########################### GIRAPH #####################################
 # 
 # DATASET="/livejournal_graph"
-DATASET="/twitter_graph"
+DATASET="/livejournal_graph"
 # INPUT_FMT="org.apache.giraph.io.formats.LongNullTextEdgeInputFormat"
 INPUT_FMT="org.apache.giraph.io.formats.IntNullTextEdgeInputFormat"
 GIRAPH_CC_COMMAND="hadoop jar \
@@ -178,6 +177,8 @@ do
   # ~/ephemeral-hdfs/bin/start-all.sh &> /dev/null
   # sleep 10
 done
+
+echo -e "\n\n FINISHED GIRAPH\n\n" | tee ~/GIRAPH_DONE
 
 ################################# DataFlow Pagerank #################################
 
