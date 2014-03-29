@@ -6,10 +6,50 @@ NODES=16
 
 NUMTRIALS=10
 NOW=$(date)
-SECONDS=$(date +%s)
+# SECONDS=$(date +%s)
+DATE=`date "+%Y%m%d.%H.%M.%S"`
 # SECONDS=$(date '+%H_%M')
-OUTPUT_DIR=/root/benchmarking/${NODES}_cluster_wikipedia/
+OUTPUT_DIR=/root/benchmarking_conn_comp
 mkdir -p $OUTPUT_DIR
+
+command=~/graphx/bin/run-example
+class=org.apache.spark.graphx.lib.Analytics
+DATASET="twitter_graph"
+# DATASET="livejournal_graph"
+NUMPARTS=64
+
+export HDFS=hdfs://$MASTERS:9000
+# GRAPHX_CC_COMMAND="$command $class spark://$MASTERS:7077 cc \
+#   $HDFS/$DATASET \
+#   --partStrategy=RandomVertexCut \
+#   --numEPart=$NUMPARTS \
+#   --dynamic=true"
+
+GRAPHX_CC_COMMAND="$command $class spark://$MASTERS:7077 cc \
+  $HDFS/$DATASET \
+  --numEPart=$NUMPARTS \
+  --dynamic=true"
+
+GRAPHX_CC_FILE=$OUTPUT_DIR/graphx_cc_results_"$NUMPARTS"parts_$DATE
+echo $GRAPHX_CC_FILE
+echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_CC_FILE
+echo $GRAPHX_CC_COMMAND | tee -a $GRAPHX_CC_FILE
+for xx in $(seq 1 $NUMTRIALS)
+do
+  # hadoop dfs -rmr /cc_del
+  $TIME -f "TOTAL_TIMEX: %e seconds" $GRAPHX_CC_COMMAND &>> $GRAPHX_CC_FILE
+  # hadoop dfs -rmr /cc_del
+  echo Finished iter $xx
+  sleep 10
+  ~/graphx/sbin/stop-all.sh &> /dev/null
+  sleep 10
+  ~/graphx/sbin/stop-all.sh &> /dev/null
+  ~/graphx/sbin/start-all.sh &> /dev/null
+  sleep 10
+  # sleep 60
+done
+exit
+
 # 
 # # for xx in $(seq 1 $NUMTRIALS)
 # # do
@@ -70,14 +110,18 @@ mkdir -p $OUTPUT_DIR
 # 
 # ########################### GIRAPH #####################################
 # 
+# DATASET="/livejournal_graph"
+DATASET="/twitter_graph"
+# INPUT_FMT="org.apache.giraph.io.formats.LongNullTextEdgeInputFormat"
+INPUT_FMT="org.apache.giraph.io.formats.IntNullTextEdgeInputFormat"
 GIRAPH_CC_COMMAND="hadoop jar \
-  /usr/local/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
+  /root/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
   org.apache.giraph.GiraphRunner org.apache.giraph.examples.ConnectedComponentsComputation \
-  -eif org.apache.giraph.io.formats.LongNullTextEdgeInputFormat \
-  -eip /wiki_parsed3_edges \
+  -eif $INPUT_FMT \
+  -eip $DATASET \
   -vof org.apache.giraph.io.formats.IdWithValueTextOutputFormat \
   -op /cc_del \
-  -w 64"
+  -w 63"
 # 
 # GIRAPH_PR_COMMAND="hadoop jar \
 #   /usr/local/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
@@ -102,23 +146,25 @@ GIRAPH_CC_COMMAND="hadoop jar \
 # done
 # 
 
-# 
-# GIRAPH_CC_FILE=$OUTPUT_DIR/giraph_cc_results.txt
-# echo "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GIRAPH_CC_FILE
-# echo $GIRAPH_CC_COMMAND | tee -a $GIRAPH_CC_FILE
-# for xx in $(seq 1 $NUMTRIALS)
-# do
-#   hadoop dfs -rmr /cc_del
-#   $TIME -f "TOTAL: %e seconds" $GIRAPH_CC_COMMAND 2>&1 | tee -a $GIRAPH_CC_FILE
-#   hadoop dfs -rmr /cc_del
-#   sleep 60
-# done
+
+GIRAPH_CC_FILE=$OUTPUT_DIR/giraph_cc_results_$DATE
+echo $GIRAPH_CC_FILE
+echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GIRAPH_CC_FILE
+echo $GIRAPH_CC_COMMAND | tee -a $GIRAPH_CC_FILE
+for xx in $(seq 1 $NUMTRIALS)
+do
+  hadoop dfs -rmr /cc_del
+  $TIME -f "TOTAL_TIMEX: %e seconds" $GIRAPH_CC_COMMAND 2>&1 | tee -a $GIRAPH_CC_FILE
+  hadoop dfs -rmr /cc_del
+  echo Finished iter $xx
+  sleep 60
+done
 
 ################################# DataFlow Pagerank #################################
 
-DF_OUTPUT_DIR=/root/benchmarking/dataflow_pagerank_2
-source /root/spark-ec2/ec2-variables.sh
-mkdir -p $DF_OUTPUT_DIR
+# DF_OUTPUT_DIR=/root/benchmarking/dataflow_pagerank_2
+# source /root/spark-ec2/ec2-variables.sh
+# mkdir -p $DF_OUTPUT_DIR
 
 # /root/rebuild-graphx
 # # Livejournal
@@ -137,34 +183,34 @@ mkdir -p $DF_OUTPUT_DIR
 # 
 
 # Wikipedia
-DF_PR_COMMAND="/root/graphx/run-example \
-  org.apache.spark.graph.algorithms.DataflowPageRank \
-  spark://$MASTERS:7077 hdfs://$MASTERS:9000/wiki_parsed3_edges"
-DF_PR_FILE=$DF_OUTPUT_DIR/df_pr_results_wikipedia.txt
-echo $DF_PR_COMMAND | tee -a $DF_PR_FILE
-for xx in $(seq 1 5)
-do
-  $TIME -f "TOTAL: %e seconds" $DF_PR_COMMAND 2>&1 | tee -a $DF_PR_FILE
-  sleep 60
-done
-
-/root/rebuild-graphx
-sleep 200
-/root/rebuild-graphx
-
-# Twitter
-DF_PR_COMMAND="/root/graphx/run-example \
-  org.apache.spark.graph.algorithms.DataflowPageRank \
-  spark://$MASTERS:7077 hdfs://$MASTERS:9000/twitter_splits"
-DF_PR_FILE=$DF_OUTPUT_DIR/df_pr_results_twitter.txt
-echo $DF_PR_COMMAND | tee -a $DF_PR_FILE
-for xx in $(seq 1 5)
-do
-  $TIME -f "TOTAL: %e seconds" $DF_PR_COMMAND 2>&1 | tee -a $DF_PR_FILE
-  sleep 60
-done
-
-exit
+# DF_PR_COMMAND="/root/graphx/run-example \
+#   org.apache.spark.graph.algorithms.DataflowPageRank \
+#   spark://$MASTERS:7077 hdfs://$MASTERS:9000/wiki_parsed3_edges"
+# DF_PR_FILE=$DF_OUTPUT_DIR/df_pr_results_wikipedia.txt
+# echo $DF_PR_COMMAND | tee -a $DF_PR_FILE
+# for xx in $(seq 1 5)
+# do
+#   $TIME -f "TOTAL: %e seconds" $DF_PR_COMMAND 2>&1 | tee -a $DF_PR_FILE
+#   sleep 60
+# done
+#
+# /root/rebuild-graphx
+# sleep 200
+# /root/rebuild-graphx
+#
+# # Twitter
+# DF_PR_COMMAND="/root/graphx/run-example \
+#   org.apache.spark.graph.algorithms.DataflowPageRank \
+#   spark://$MASTERS:7077 hdfs://$MASTERS:9000/twitter_splits"
+# DF_PR_FILE=$DF_OUTPUT_DIR/df_pr_results_twitter.txt
+# echo $DF_PR_COMMAND | tee -a $DF_PR_FILE
+# for xx in $(seq 1 5)
+# do
+#   $TIME -f "TOTAL: %e seconds" $DF_PR_COMMAND 2>&1 | tee -a $DF_PR_FILE
+#   sleep 60
+# done
+#
+# exit
 
 
 

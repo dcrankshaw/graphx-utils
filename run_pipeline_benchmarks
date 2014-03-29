@@ -4,7 +4,8 @@
 source ~/spark-ec2/ec2-variables.sh
 command=~/graphx/bin/run-example
 # class="org.apache.spark.examples.graphx.PrePostProcessWikipedia"
-class="org.apache.spark.graphx.WikiPipelineBenchmark"
+# class="org.apache.spark.graphx.WikiPipelineBenchmark"
+class="org.apache.spark.graphx.WikiPipelineBenchmarkSimplified"
 epart=128
 algo=pagerank
 # data="wiki_top4mil"
@@ -17,70 +18,94 @@ export GRAPHLAB=/mnt/graphlab
 tc=/usr/bin/time
 numtrials=5
 numiters=10
+numPRIters=5
 export HDFS=hdfs://$MASTERS:9000
 
 gx_output_file=~/benchmark_output/graphx-$DATE
-# echo $gx_output_file
+echo $gx_output_file
 
 
-# Graphx Benchmark
-# echo $command $class spark://$MASTERS:7077 graphx hdfs://$MASTERS:9000/$data $numiters >> $gx_output_file
-# { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 graphx $HDFS/$data $numiters; } &>> $gx_output_file
+# Graphx Benchmark ############################################
+echo $command $class spark://$MASTERS:7077 graphx hdfs://$MASTERS:9000/$data $numiters >> $gx_output_file
+{ $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 graphx $HDFS/$data $numiters $numPRIters; } &>> $gx_output_file
+  ############################################
+
+# GraphLab Benchmark #############################################
+# glab_output_file=~/benchmark_output/graph_lab-$DATE
+#
+# outbase=wiki_graph_processing
+# # CLEAN UP from previous trials
+# hadoop dfs -rmr /"$outbase"*
+#
+# echo $glab_output_file
+#
+# #extract graph
+# glab_start=`date "+%s"`
+#
+# { $tc -f "Extract Graph: %e seconds" $command $class spark://$MASTERS:7077 extract $HDFS/$data $HDFS/$outbase; } &>> $glab_output_file
+# echo Finished extracting graph
+#
+# NODES=16
+#
+# # numiters=3
+# for i in $(seq 0 $numiters)
+# do
+#   start=`date "+%s"`
+#   #cleanup from previous iteration
+#   x=$(( $i - 1 ))
+#   if [ $x -gt 0 ]
+#   then
+#     hadoop dfs -rmr /"$outbase"_"$x"_prs* &> /dev/null
+#     hadoop dfs -rmr /"$outbase"_"$x"_ccs* &> /dev/null
+#   fi
+#
+#
+#   hadoop dfs -rm /"$outbase"_edges_$i/_SUCCESS &> /dev/null
+#   hadoop dfs -rm /"$outbase"_vertices_$i/_SUCCESS &> /dev/null
+#
+#   # PageRank
+#   { $tc -f "Pagerank iter $i %e seconds" mpiexec --hostfile ~/spark-ec2/slaves -n $NODES env CLASSPATH=$(hadoop classpath) \
+#     $GRAPHLAB/release/toolkits/graph_analytics/pagerank --graph=$HDFS/"$outbase"_edges_$i \
+#     --format=snap --ncpus=8 --tol=0 --iterations=$numPRIters --saveprefix=$HDFS/"$outbase"_"$i"_prs; } &>> $glab_output_file
+#
+#   # Connected Components
+#   { $tc -f "Connected Components iter $i %e seconds" mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
+#     CLASSPATH=$(hadoop classpath) $GRAPHLAB/release/toolkits/graph_analytics/connected_component \
+#     --graph=$HDFS/"$outbase"_edges_$i --format=snap --ncpus=8 --saveprefix=$HDFS/"$outbase"_"$i"_ccs; } &>> $glab_output_file
+#
+#
+# #   $TIME -f "TOTAL: %e seconds" $GL_PR_COMMAND 2>&1 | tee -a $GL_PR_FILE
+#   #Post processing
+#   { $tc -f "Analyze Graph iter $i : %e seconds" $command $class spark://$MASTERS:7077 analyze $HDFS/$outbase $i; } &>> $glab_output_file
+#
+#   end=`date "+%s"`
+#   dur=$(( end - start ))
+#   echo TOTAL_TIMEX iteration "$i": $dur | tee -a $glab_output_file
+# done
+#
+#
+# glab_end=`date "+%s"`
+# glab_dur=$(( glab_end - glab_start ))
+# echo GRAPHLAB TOTAL_TIMEX: $glab_dur | tee -a $glab_output_file
+
+##########################################################################
 
 
-glab_output_file=~/benchmark_output/graph_lab-$DATE
-echo $glab_output_file
-
-outbase=wiki_graph_processing
-
-#extract graph
-glab_start=`date "+%s"`
-
-{ $tc -f "Extract Graph: %e seconds" $command $class spark://$MASTERS:7077 extract $HDFS/$data $HDFS/$outbase; } &>> $glab_output_file
-echo Finished extracting graph
-
-NODES=16
-
-# numiters=3
-for i in $(seq 0 $numiters)
-do
-  start=`date "+%s"`
-  #cleanup from previous iteration
-  x=$(( $i - 1 ))
-  if [ $x -gt 0 ]
-  then
-    hadoop dfs -rmr /"$outbase"_"$x"_prs* &> /dev/null
-    hadoop dfs -rmr /"$outbase"_"$x"_ccs* &> /dev/null
-  fi
 
 
-  hadoop dfs -rm /"$outbase"_edges_$i/_SUCCESS &> /dev/null
-  hadoop dfs -rm /"$outbase"_vertices_$i/_SUCCESS &> /dev/null
-
-  # PageRank
-  { $tc -f "Pagerank iter $i %e seconds" mpiexec --hostfile ~/spark-ec2/slaves -n $NODES env CLASSPATH=$(hadoop classpath) \
-    $GRAPHLAB/release/toolkits/graph_analytics/pagerank --graph=$HDFS/"$outbase"_edges_$i \
-    --format=snap --ncpus=8 --tol=0 --iterations=20 --saveprefix=$HDFS/"$outbase"_"$i"_prs; } &>> $glab_output_file
-
-  # Connected Components
-  { $tc -f "Connected Components iter $i %e seconds" mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
-    CLASSPATH=$(hadoop classpath) $GRAPHLAB/release/toolkits/graph_analytics/connected_component \
-    --graph=$HDFS/"$outbase"_edges_$i --format=snap --ncpus=8 --saveprefix=$HDFS/"$outbase"_"$i"_ccs; } &>> $glab_output_file
 
 
-#   $TIME -f "TOTAL: %e seconds" $GL_PR_COMMAND 2>&1 | tee -a $GL_PR_FILE
-  #Post processing
-  { $tc -f "Analyze Graph iter $i : %e seconds" $command $class spark://$MASTERS:7077 analyze $HDFS/$outbase $i; } &>> $glab_output_file
-
-  end=`date "+%s"`
-  dur=$(( end - start ))
-  echo TOTAL_TIMEX iteration "$i": $dur | tee -a $glab_output_file
-done
 
 
-glab_end=`date "+%s"`
-glab_dur=$(( glab_end - glab_start ))
-echo GRAPHLAB TOTAL_TIMEX: $glab_dur | tee -a $glab_output_file
+
+
+
+
+
+
+
+
+
 
 
 
