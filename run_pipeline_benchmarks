@@ -1,29 +1,123 @@
 #!/usr/bin/env bash
 
-# Gives us $MASTERS env var
 source ~/spark-ec2/ec2-variables.sh
-command=~/graphx/bin/run-example
-# class="org.apache.spark.examples.graphx.PrePostProcessWikipedia"
-# class="org.apache.spark.graphx.WikiPipelineBenchmark"
-class="org.apache.spark.graphx.WikiPipelineBenchmarkSimplified"
-epart=128
-algo=pagerank
-# data="wiki_top4mil"
-data="enwiki-latest"
-# DATE=`date +%Y-%m-%d`
-DATE=`date "+%Y%m%d.%H.%M.%S"`
-# echo $DATE
-
 export GRAPHLAB=/mnt/graphlab
-tc=/usr/bin/time
-numtrials=5
-numiters=10
-numPRIters=5
 export HDFS=hdfs://$MASTERS:9000
+DATE=`date "+%Y%m%d.%H.%M.%S"`
+TIME=/usr/bin/time
+NUMTRIALS=3
+NUMSTAGES=10
+PR_ITERATIONS=20
+DATASET="/enwiki-latest"
+OUTBASE="/wiki_graph_processing"
+LOGBASEDIR="/root/pipeline_results_debug"
+mkdir -p $LOGBASEDIR
 
-gx_output_file=~/benchmark_output/graphx-$DATE
-echo $gx_output_file
+EXTRACT_GRAPH_COMMAND="/root/graphx/bin/run-example \
+  org.apache.spark.graphx.WikiPipelineBenchmarkSimplified \
+  spark://MASTERS:7077 extract $HDFS$DATASET $HDFS$OUTBASE"
 
+graphlab_pipeline() {
+  GL_OUTPUT_FILE=$LOGBASEDIR/graphlab_$DATE
+  echo $GL_OUTPUT_FILE
+  echo -e "\n\n\b Starting Pipeline\n" >> $GL_OUTPUT_FILE
+  $TIME -f "EXTRACT_TIMEX" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
+  for i in $(seq 0 $NUMSTAGES)
+  do
+    start=`date "+%s"`
+    hadoop dfs -rm $HDFS$OUTBASE-edges_del_$i/_SUCCESS &> /dev/null
+    GRAPHLAB_PR_COMMAND="mpiexec --hostfile ~/spark-ec2/slaves -n $NODES \
+        env CLASSPATH=$(hadoop classpath) \
+      $GRAPHLAB/release/toolkits/graph_analytics/pagerank \
+      --graph=$HDFS$OUTBASE-edges_del_$i \
+      --format=snap --ncpus=8 --tol=0 --iterations=$PR_ITERATIONS \
+      --saveprefix=$HDFS$OUTBASE-prs_del_i"
+    $TIME -f "PR_TIMEX: %e seconds" $GRAPHLAB_PR_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
+      
+    # Don't forget to append iter to end of save prefec
+    GRAPHLAB_CC_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES \
+      env CLASSPATH=$(hadoop classpath) \
+      $GRAPHLAB/release/toolkits/graph_analytics/connected_component \
+      --graph=$HDFS$OUTBASE-edges_del_$i --format=snap --ncpus=8 \
+      --saveprefix=$HDFS$OUTBASE-ccs_del_$i"
+
+    $TIME -f "CC_TIMEX: %e seconds" $GRAPHLAB_CC_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
+
+    ANALYZE_RESULTS_COMMAND="/root/graphx/bin/run-example \
+      org.apache.spark.graphx.WikiPipelineBenchmarkSimplified \
+      spark://MASTERS:7077 analyze $HDFS$OUTBASE $i"
+
+    $TIME -f "ANALYZE_TIMEX: %e seconds" $ANALYZE_RESULTS_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
+    hadoop dfs -rmr $HDFS$OUTBASE-ccs_del_$i &> /dev/null
+    hadoop dfs -rmr $HDFS$OUTBASE-prs_del_$i &> /dev/null
+
+    end=`date "+%s"`
+    dur=$(( end - start ))
+    echo TOTAL_TIMEX iteration "$i": $dur | tee -a $GL_OUTPUT_FILE
+  done
+}
+
+
+giraph_pipeline() {
+  GIRAPH_OUTPUT_FILE=$LOGBASEDIR/giraph_$DATE
+  echo $GIRAPH_OUTPUT_FILE
+  echo -e "\n\n\b Starting Pipeline\n" >> $GIRAPH_OUTPUT_FILE
+  $TIME -f "EXTRACT_TIMEX" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $GIRAPH_OUTPUT_FILE
+  for i in $(seq 0 $NUMSTAGES)
+  do
+    start=`date "+%s"`
+    hadoop dfs -rm $HDFS$OUTBASE-edges_del_$i/_SUCCESS &> /dev/null
+
+    GIRAPH_PR_COMMAND="hadoop jar \
+      /usr/local/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
+      org.apache.giraph.GiraphRunner org.apache.giraph.examples.SimplePageRankComputation \
+      -eif org.apache.giraph.io.formats.LongDefaultFloatTextEdgeInputFormat \
+      -eip $HDFS$OUTBASE-edges_del_$i/part* \
+      -vof org.apache.giraph.io.formats.IdWithValueTextOutputFormat \
+      -op $HDFS$OUTBASE-prs_del_$i \
+      -w 63 \
+      -mc org.apache.giraph.examples.SimplePageRankComputation\$SimplePageRankMasterCompute"
+
+    $TIME -f "PR_TIMEX: %e seconds" $GIRAPH_PR_COMMAND 2>&1 | tee -a $GIRAPH_OUTPUT_FILE
+
+    GIRAPH_CC_COMMAND="hadoop jar \
+      /root/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
+      org.apache.giraph.GiraphRunner org.apache.giraph.examples.ConnectedComponentsComputation \
+      -eif org.apache.giraph.io.formats.IntNullTextEdgeInputFormat \
+      -eip $HDFS$OUTBASE-edges_del_$i/part* \
+      -vof org.apache.giraph.io.formats.IdWithValueTextOutputFormat \
+      -op $HDFS$OUTBASE-ccs_del_$i \
+      -w 63"
+
+    $TIME -f "CC_TIMEX: %e seconds" $GIRAPH_CC_COMMAND 2>&1 | tee -a $GIRAPH_OUTPUT_FILE
+
+    ANALYZE_RESULTS_COMMAND="/root/graphx/bin/run-example \
+      org.apache.spark.graphx.WikiPipelineBenchmarkSimplified \
+      spark://MASTERS:7077 analyze $HDFS$OUTBASE $i"
+
+    $TIME -f "ANALYZE_TIMEX: %e seconds" $ANALYZE_RESULTS_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
+    hadoop dfs -rmr $HDFS$OUTBASE-ccs_del_$i &> /dev/null
+    hadoop dfs -rmr $HDFS$OUTBASE-prs_del_$i &> /dev/null
+    end=`date "+%s"`
+    dur=$(( end - start ))
+    echo TOTAL_TIMEX iteration "$i": $dur | tee -a $GL_OUTPUT_FILE
+  done
+}
+
+
+graphx_pipeline() {
+
+  GRAPHX_OUTPUT_FILE=$LOGBASEDIR/graphx_$DATE
+  echo $GRAPHX_OUTPUT_FILE
+  echo -e "\n\n\b Starting Pipeline\n" >> $GRAPHX_OUTPUT_FILE
+
+  GRAPHX_COMMAND="/root/graphx/bin/run-example \
+    org.apache.spark.graphx.WikiPipelineBenchmarkSimplified \
+    spark://MASTERS:7077 graphx $HDFS$DATASET $NUMSTAGES \
+    $PR_ITERATIONS"
+    $TIME -f "TOTAL_PIPELINE_TIMEX: %e seconds"  GRAPHX_COMMAND 2>&1 | tee -a $GRAPHX_OUTPUT_FILE
+}
+#
 
 # Graphx Benchmark ############################################
 echo $command $class spark://$MASTERS:7077 graphx hdfs://$MASTERS:9000/$data $numiters >> $gx_output_file
