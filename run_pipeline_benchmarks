@@ -11,8 +11,8 @@ NUMSTAGES=8
 PR_ITERATIONS=15
 DATASET="/enwiki-latest"
 OUTBASE="/wiki_graph_processing"
-# LOGBASEDIR="/root/pipeline_results_FOREAL"
-LOGBASEDIR="/root/pipeline_debug_extract"
+LOGBASEDIR="/root/pipeline_results_FOREAL"
+# LOGBASEDIR="/root/pipeline_debug_extract"
 NODES=16
 mkdir -p $LOGBASEDIR
 GIRAPH_OUTPUT_FILE=$LOGBASEDIR/giraph_$DATE
@@ -135,13 +135,13 @@ sleep 10
 ~/graphx/sbin/start-all.sh
 sleep 10
 
-hadoop dfs -rmr $OUTBASE* &> /dev/null
-GRAPHX_COMMAND="/root/graphx/bin/run-example \
-  org.apache.spark.graphx.WikiPipelineBenchmark \
-  $SPARK graphx $HDFS$DATASET 0 \
-  $PR_ITERATIONS"
-$TIME -f "TOTAL_PIPELINE_TIMEX_internal: %e seconds"  $GRAPHX_COMMAND 2>&1 | tee -a $LOGBASEDIR/graphx2_extract_$DATE
-exit
+# hadoop dfs -rmr $OUTBASE* &> /dev/null
+# GRAPHX_COMMAND="/root/graphx/bin/run-example \
+#   org.apache.spark.graphx.WikiPipelineBenchmark \
+#   $SPARK graphx $HDFS$DATASET 0 \
+#   $PR_ITERATIONS"
+# $TIME -f "TOTAL_PIPELINE_TIMEX_internal: %e seconds"  $GRAPHX_COMMAND 2>&1 | tee -a $LOGBASEDIR/graphx2_extract_$DATE
+# exit
 
 # hadoop dfs -rmr $OUTBASE* &> /dev/null
 # $TIME -f "EXTRACT_TIMEX: %e seconds" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $LOGBASEDIR/extract2_$DATE
@@ -180,19 +180,19 @@ exit
 # touch ~/GIRAPH_DONE
 
 #Graphx
-# for t in $(seq 1 $NUMSTAGES)
-# do
-#   pstart=`date "+%s"`
-#   graphx_pipeline
-#   pend=`date "+%s"`
-#   pdur=$(( pend - pstart ))
-#   echo "TOTAL_PIPELINE_TIMEX trial $t: $pdur seconds" | tee -a $GRAPHX_OUTPUT_FILE
-#   ~/graphx/sbin/stop-all.sh
-#   sleep 10
-#   ~/graphx/sbin/start-all.sh
-#   sleep 10
-# done
-# touch ~/GRAPHX_DONE
+for t in $(seq 1 $NUMSTAGES)
+do
+  pstart=`date "+%s"`
+  graphx_pipeline
+  pend=`date "+%s"`
+  pdur=$(( pend - pstart ))
+  echo "TOTAL_PIPELINE_TIMEX trial $t: $pdur seconds" | tee -a $GRAPHX_OUTPUT_FILE
+  ~/graphx/sbin/stop-all.sh
+  sleep 10
+  ~/graphx/sbin/start-all.sh
+  sleep 10
+done
+touch ~/GRAPHX_DONE
 
 
 
