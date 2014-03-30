@@ -28,7 +28,7 @@ git checkout spark-ec2-build
 cd release/toolkits/graph_analytics
 make -j8
 cd /mnt
-~/spark-ec2/copy-dir.sh graphlab
+~/spark-ec2/copy-dir graphlab
 
 ##### UPDATE THE HDFS NAMENODE
 source ~/spark-ec2/ec2-variables.sh

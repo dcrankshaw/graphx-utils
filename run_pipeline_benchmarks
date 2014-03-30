@@ -3,39 +3,48 @@
 source ~/spark-ec2/ec2-variables.sh
 export GRAPHLAB=/mnt/graphlab
 export HDFS=hdfs://$MASTERS:9000
+export SPARK=spark://$MASTERS:7077
 DATE=`date "+%Y%m%d.%H.%M.%S"`
 TIME=/usr/bin/time
-NUMTRIALS=3
-NUMSTAGES=10
-PR_ITERATIONS=20
+NUMTRIALS=8
+NUMSTAGES=8
+PR_ITERATIONS=15
 DATASET="/enwiki-latest"
 OUTBASE="/wiki_graph_processing"
-LOGBASEDIR="/root/pipeline_results_debug"
+# LOGBASEDIR="/root/pipeline_results_FOREAL"
+LOGBASEDIR="/root/pipeline_debug_extract"
+NODES=16
 mkdir -p $LOGBASEDIR
+GIRAPH_OUTPUT_FILE=$LOGBASEDIR/giraph_$DATE
+echo $GIRAPH_OUTPUT_FILE
+GL_OUTPUT_FILE=$LOGBASEDIR/graphlab_$DATE
+echo $GL_OUTPUT_FILE
+GRAPHX_OUTPUT_FILE=$LOGBASEDIR/graphx_$DATE
+echo $GRAPHX_OUTPUT_FILE
 
 EXTRACT_GRAPH_COMMAND="/root/graphx/bin/run-example \
-  org.apache.spark.graphx.WikiPipelineBenchmarkSimplified \
-  spark://MASTERS:7077 extract $HDFS$DATASET $HDFS$OUTBASE"
+  org.apache.spark.graphx.WikiPipelineBenchmark \
+  $SPARK extract $HDFS$DATASET $HDFS$OUTBASE"
+# EXTRACT_GRAPH_COMMAND="echo EXTRACTING"
 
 graphlab_pipeline() {
-  GL_OUTPUT_FILE=$LOGBASEDIR/graphlab_$DATE
   echo $GL_OUTPUT_FILE
   echo -e "\n\n\b Starting Pipeline\n" >> $GL_OUTPUT_FILE
-  $TIME -f "EXTRACT_TIMEX" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
-  for i in $(seq 0 $NUMSTAGES)
+  $TIME -f "EXTRACT_TIMEX: %e seconds" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
+  for i in $(seq 1 $NUMSTAGES)
   do
     start=`date "+%s"`
     hadoop dfs -rm $HDFS$OUTBASE-edges_del_$i/_SUCCESS &> /dev/null
-    GRAPHLAB_PR_COMMAND="mpiexec --hostfile ~/spark-ec2/slaves -n $NODES \
+    GRAPHLAB_PR_COMMAND="mpiexec --hostfile /root/ephemeral-hdfs/conf/slaves -n $NODES \
         env CLASSPATH=$(hadoop classpath) \
       $GRAPHLAB/release/toolkits/graph_analytics/pagerank \
       --graph=$HDFS$OUTBASE-edges_del_$i \
       --format=snap --ncpus=8 --tol=0 --iterations=$PR_ITERATIONS \
-      --saveprefix=$HDFS$OUTBASE-prs_del_i"
+      --saveprefix=$HDFS$OUTBASE-prs_del_$i"
     $TIME -f "PR_TIMEX: %e seconds" $GRAPHLAB_PR_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
       
     # Don't forget to append iter to end of save prefec
-    GRAPHLAB_CC_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES \
+    GRAPHLAB_CC_COMMAND="mpiexec --hostfile /root/ephemeral-hdfs/conf/slaves -n $NODES \
       env CLASSPATH=$(hadoop classpath) \
       $GRAPHLAB/release/toolkits/graph_analytics/connected_component \
       --graph=$HDFS$OUTBASE-edges_del_$i --format=snap --ncpus=8 \
@@ -44,12 +53,12 @@ graphlab_pipeline() {
     $TIME -f "CC_TIMEX: %e seconds" $GRAPHLAB_CC_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
 
     ANALYZE_RESULTS_COMMAND="/root/graphx/bin/run-example \
-      org.apache.spark.graphx.WikiPipelineBenchmarkSimplified \
-      spark://MASTERS:7077 analyze $HDFS$OUTBASE $i"
+      org.apache.spark.graphx.WikiPipelineBenchmark \
+      $SPARK analyze $HDFS$OUTBASE $i 0"
 
     $TIME -f "ANALYZE_TIMEX: %e seconds" $ANALYZE_RESULTS_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
-    hadoop dfs -rmr $HDFS$OUTBASE-ccs_del_$i &> /dev/null
-    hadoop dfs -rmr $HDFS$OUTBASE-prs_del_$i &> /dev/null
+    # hadoop dfs -rmr $HDFS$OUTBASE-ccs_del_$i* &> /dev/null
+    # hadoop dfs -rmr $HDFS$OUTBASE-prs_del_$i* &> /dev/null
 
     end=`date "+%s"`
     dur=$(( end - start ))
@@ -59,20 +68,19 @@ graphlab_pipeline() {
 
 
 giraph_pipeline() {
-  GIRAPH_OUTPUT_FILE=$LOGBASEDIR/giraph_$DATE
   echo $GIRAPH_OUTPUT_FILE
   echo -e "\n\n\b Starting Pipeline\n" >> $GIRAPH_OUTPUT_FILE
-  $TIME -f "EXTRACT_TIMEX" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $GIRAPH_OUTPUT_FILE
-  for i in $(seq 0 $NUMSTAGES)
+  $TIME -f "EXTRACT_TIMEX: %e seconds" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $GIRAPH_OUTPUT_FILE
+  for i in $(seq 1 $NUMSTAGES)
   do
     start=`date "+%s"`
     hadoop dfs -rm $HDFS$OUTBASE-edges_del_$i/_SUCCESS &> /dev/null
 
     GIRAPH_PR_COMMAND="hadoop jar \
-      /usr/local/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
+      /root/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
       org.apache.giraph.GiraphRunner org.apache.giraph.examples.SimplePageRankComputation \
       -eif org.apache.giraph.io.formats.LongDefaultFloatTextEdgeInputFormat \
-      -eip $HDFS$OUTBASE-edges_del_$i/part* \
+      -eip $HDFS$OUTBASE-edges_del_$i/ \
       -vof org.apache.giraph.io.formats.IdWithValueTextOutputFormat \
       -op $HDFS$OUTBASE-prs_del_$i \
       -w 63 \
@@ -83,8 +91,8 @@ giraph_pipeline() {
     GIRAPH_CC_COMMAND="hadoop jar \
       /root/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
       org.apache.giraph.GiraphRunner org.apache.giraph.examples.ConnectedComponentsComputation \
-      -eif org.apache.giraph.io.formats.IntNullTextEdgeInputFormat \
-      -eip $HDFS$OUTBASE-edges_del_$i/part* \
+      -eif org.apache.giraph.io.formats.LongNullTextEdgeInputFormat \
+      -eip $HDFS$OUTBASE-edges_del_$i/ \
       -vof org.apache.giraph.io.formats.IdWithValueTextOutputFormat \
       -op $HDFS$OUTBASE-ccs_del_$i \
       -w 63"
@@ -92,206 +100,103 @@ giraph_pipeline() {
     $TIME -f "CC_TIMEX: %e seconds" $GIRAPH_CC_COMMAND 2>&1 | tee -a $GIRAPH_OUTPUT_FILE
 
     ANALYZE_RESULTS_COMMAND="/root/graphx/bin/run-example \
-      org.apache.spark.graphx.WikiPipelineBenchmarkSimplified \
-      spark://MASTERS:7077 analyze $HDFS$OUTBASE $i"
+      org.apache.spark.graphx.WikiPipelineBenchmark \
+      $SPARK analyze $HDFS$OUTBASE $i 1"
 
     $TIME -f "ANALYZE_TIMEX: %e seconds" $ANALYZE_RESULTS_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
-    hadoop dfs -rmr $HDFS$OUTBASE-ccs_del_$i &> /dev/null
-    hadoop dfs -rmr $HDFS$OUTBASE-prs_del_$i &> /dev/null
+    # hadoop dfs -rmr $HDFS$OUTBASE-ccs_del_$i* &> /dev/null
+    # hadoop dfs -rmr $HDFS$OUTBASE-prs_del_$i* &> /dev/null
     end=`date "+%s"`
     dur=$(( end - start ))
-    echo TOTAL_TIMEX iteration "$i": $dur | tee -a $GL_OUTPUT_FILE
+    echo TOTAL_TIMEX iteration $i: $dur | tee -a $GL_OUTPUT_FILE
   done
 }
 
 
 graphx_pipeline() {
 
-  GRAPHX_OUTPUT_FILE=$LOGBASEDIR/graphx_$DATE
   echo $GRAPHX_OUTPUT_FILE
   echo -e "\n\n\b Starting Pipeline\n" >> $GRAPHX_OUTPUT_FILE
 
   GRAPHX_COMMAND="/root/graphx/bin/run-example \
-    org.apache.spark.graphx.WikiPipelineBenchmarkSimplified \
-    spark://MASTERS:7077 graphx $HDFS$DATASET $NUMSTAGES \
+    org.apache.spark.graphx.WikiPipelineBenchmark \
+    $SPARK graphx $HDFS$DATASET $NUMSTAGES \
     $PR_ITERATIONS"
-    $TIME -f "TOTAL_PIPELINE_TIMEX: %e seconds"  GRAPHX_COMMAND 2>&1 | tee -a $GRAPHX_OUTPUT_FILE
+    $TIME -f "TOTAL_PIPELINE_TIMEX_internal: %e seconds"  $GRAPHX_COMMAND 2>&1 | tee -a $GRAPHX_OUTPUT_FILE
 }
-#
 
-# Graphx Benchmark ############################################
-echo $command $class spark://$MASTERS:7077 graphx hdfs://$MASTERS:9000/$data $numiters >> $gx_output_file
-{ $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 graphx $HDFS/$data $numiters $numPRIters; } &>> $gx_output_file
-  ############################################
+rm  ~/GRAPHX_DONE
+rm  ~/GRAPHLAB_DONE
+rm  ~/GIRAPH_DONE
 
-# GraphLab Benchmark #############################################
-# glab_output_file=~/benchmark_output/graph_lab-$DATE
-#
-# outbase=wiki_graph_processing
-# # CLEAN UP from previous trials
-# hadoop dfs -rmr /"$outbase"*
-#
-# echo $glab_output_file
-#
-# #extract graph
-# glab_start=`date "+%s"`
-#
-# { $tc -f "Extract Graph: %e seconds" $command $class spark://$MASTERS:7077 extract $HDFS/$data $HDFS/$outbase; } &>> $glab_output_file
-# echo Finished extracting graph
-#
-# NODES=16
-#
-# # numiters=3
-# for i in $(seq 0 $numiters)
+
+~/graphx/sbin/stop-all.sh
+sleep 10
+~/graphx/sbin/start-all.sh
+sleep 10
+
+hadoop dfs -rmr $OUTBASE* &> /dev/null
+GRAPHX_COMMAND="/root/graphx/bin/run-example \
+  org.apache.spark.graphx.WikiPipelineBenchmark \
+  $SPARK graphx $HDFS$DATASET 0 \
+  $PR_ITERATIONS"
+$TIME -f "TOTAL_PIPELINE_TIMEX_internal: %e seconds"  $GRAPHX_COMMAND 2>&1 | tee -a $LOGBASEDIR/graphx2_extract_$DATE
+exit
+
+# hadoop dfs -rmr $OUTBASE* &> /dev/null
+# $TIME -f "EXTRACT_TIMEX: %e seconds" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $LOGBASEDIR/extract2_$DATE
+
+
+#Graphlab
+# for t in $(seq 1 $NUMSTAGES)
 # do
-#   start=`date "+%s"`
-#   #cleanup from previous iteration
-#   x=$(( $i - 1 ))
-#   if [ $x -gt 0 ]
-#   then
-#     hadoop dfs -rmr /"$outbase"_"$x"_prs* &> /dev/null
-#     hadoop dfs -rmr /"$outbase"_"$x"_ccs* &> /dev/null
-#   fi
-#
-#
-#   hadoop dfs -rm /"$outbase"_edges_$i/_SUCCESS &> /dev/null
-#   hadoop dfs -rm /"$outbase"_vertices_$i/_SUCCESS &> /dev/null
-#
-#   # PageRank
-#   { $tc -f "Pagerank iter $i %e seconds" mpiexec --hostfile ~/spark-ec2/slaves -n $NODES env CLASSPATH=$(hadoop classpath) \
-#     $GRAPHLAB/release/toolkits/graph_analytics/pagerank --graph=$HDFS/"$outbase"_edges_$i \
-#     --format=snap --ncpus=8 --tol=0 --iterations=$numPRIters --saveprefix=$HDFS/"$outbase"_"$i"_prs; } &>> $glab_output_file
-#
-#   # Connected Components
-#   { $tc -f "Connected Components iter $i %e seconds" mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
-#     CLASSPATH=$(hadoop classpath) $GRAPHLAB/release/toolkits/graph_analytics/connected_component \
-#     --graph=$HDFS/"$outbase"_edges_$i --format=snap --ncpus=8 --saveprefix=$HDFS/"$outbase"_"$i"_ccs; } &>> $glab_output_file
-#
-#
-# #   $TIME -f "TOTAL: %e seconds" $GL_PR_COMMAND 2>&1 | tee -a $GL_PR_FILE
-#   #Post processing
-#   { $tc -f "Analyze Graph iter $i : %e seconds" $command $class spark://$MASTERS:7077 analyze $HDFS/$outbase $i; } &>> $glab_output_file
-#
-#   end=`date "+%s"`
-#   dur=$(( end - start ))
-#   echo TOTAL_TIMEX iteration "$i": $dur | tee -a $glab_output_file
+#   hadoop dfs -rmr $OUTBASE* &> /dev/null
+#   pstart=`date "+%s"`
+#   graphlab_pipeline
+#   pend=`date "+%s"`
+#   pdur=$(( pend - pstart ))
+#   echo "TOTAL_PIPELINE_TIMEX trial $t: $pdur seconds" | tee -a $GL_OUTPUT_FILE
+#   ~/graphx/sbin/stop-all.sh
+#   sleep 10
+#   ~/graphx/sbin/start-all.sh
+#   sleep 10
 # done
+# touch ~/GRAPHLAB_DONE
 #
-#
-# glab_end=`date "+%s"`
-# glab_dur=$(( glab_end - glab_start ))
-# echo GRAPHLAB TOTAL_TIMEX: $glab_dur | tee -a $glab_output_file
-
-##########################################################################
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 5 iterations pagerank
-# iter=20
-# counter=0
-# partstrat="RandomVertexCut"
-# while [ $counter -lt $numtrials ]; do
-#   # echo "NEW RUN!!!!!" >> $file
-#   # ~/rebuild-graphx -no
-#   echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart --partStrategy=$partstrat >> $file
-#   #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
-#   { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart --partStrategy=$partstrat; } 2>> $file
-#   echo "" >> $file
-#   counter=$(( $counter + 1 ))
+# #Giraph
+# for t in $(seq 1 $NUMSTAGES)
+# do
+#   hadoop dfs -rmr $OUTBASE* &> /dev/null
+#   pstart=`date "+%s"`
+#   giraph_pipeline
+#   pend=`date "+%s"`
+#   pdur=$(( pend - pstart ))
+#   echo "TOTAL_PIPELINE_TIMEX trial $t: $pdur seconds" | tee -a $GIRAPH_OUTPUT_FILE
+#   ~/graphx/sbin/stop-all.sh
+#   sleep 10
+#   ~/graphx/sbin/start-all.sh
+#   sleep 10
 # done
+# touch ~/GIRAPH_DONE
 
-
-# 10 iterations pagerank
-# iter=10
-# counter=0
-# while [ $counter -lt $numtrials ]; do
-#   # echo "NEW RUN!!!!!" >> $file
-#   echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart >> $file
-#   #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
-#   { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart; } 2>> $file
-#   echo "" >> $file
-#   counter=$(( $counter + 1 ))
+#Graphx
+# for t in $(seq 1 $NUMSTAGES)
+# do
+#   pstart=`date "+%s"`
+#   graphx_pipeline
+#   pend=`date "+%s"`
+#   pdur=$(( pend - pstart ))
+#   echo "TOTAL_PIPELINE_TIMEX trial $t: $pdur seconds" | tee -a $GRAPHX_OUTPUT_FILE
+#   ~/graphx/sbin/stop-all.sh
+#   sleep 10
+#   ~/graphx/sbin/start-all.sh
+#   sleep 10
 # done
-
-
-# 20 iterations pagerank
-# iter=20 counter=0
-# partstrat="RandomVertexCut"
-# while [ $counter -lt $numtrials ]; do
-#   # echo "NEW RUN!!!!!" >> $file
-#   echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart --partStrategy=$partstrat >> $file
-#   #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
-#   { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart --partStrategy=$partstrat; } 2>> $file
-#   echo "" >> $file
-#   counter=$(( $counter + 1 ))
-#   # restart the cluster because my fucking slaves keep dying
-#   ~/rebuild-graphx -no
-# done
-# 
-# iter=20
-# counter=0
-# partstrat="EdgePartition1D"
-# while [ $counter -lt $numtrials ]; do
-#   # echo "NEW RUN!!!!!" >> $file
-#   echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart --partStrategy=$partstrat >> $file
-#   #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
-#   { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart --partStrategy=$partstrat; } 2>> $file
-#   echo "" >> $file
-#   counter=$(( $counter + 1 ))
-#   # restart the cluster because my fucking slaves keep dying
-#   ~/rebuild-graphx -no
-# done
-# 
-# iter=20
-# counter=0
-# partstrat="EdgePartition2D"
-# while [ $counter -lt $numtrials ]; do
-#   # echo "NEW RUN!!!!!" >> $file
-#   echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart --partStrategy=$partstrat >> $file
-#   #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
-#   { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart --partStrategy=$partstrat; } 2>> $file
-#   echo "" >> $file
-#   counter=$(( $counter + 1 ))
-#   # restart the cluster because my fucking slaves keep dying
-#   ~/rebuild-graphx -no
-# done
-
-
-
-# # 40 iterations pagerank
-# iter=40
-# counter=0
-# while [ $counter -lt $numtrials ]; do
-#   # echo "NEW RUN!!!!!" >> $file
-#   echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart >> $file
-#   #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
-#   { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart; } 2>> $file
-#   echo "" >> $file
-#   counter=$(( $counter + 1 ))
-# done
+# touch ~/GRAPHX_DONE
 
 
 
 
 
-
-#time ./run-example org.apache.spark.graph.Analytics spark://$MASTER:7077 pagerank hdfs://$MASTER:9000/soc-LiveJournal1.txt --numIter=2 --numEPart=128
 
 
