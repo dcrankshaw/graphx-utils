@@ -6,12 +6,12 @@ export HDFS=hdfs://$MASTERS:9000
 export SPARK=spark://$MASTERS:7077
 DATE=`date "+%Y%m%d.%H.%M.%S"`
 TIME=/usr/bin/time
-NUMTRIALS=8
-NUMSTAGES=8
-PR_ITERATIONS=15
+NUMTRIALS=2
+NUMSTAGES=5
+PR_ITERATIONS=5
 DATASET="/enwiki-latest"
-OUTBASE="/wiki_graph_processing"
-LOGBASEDIR="/root/pipeline_results_FOREAL"
+OUTBASE="/twitter_gp"
+LOGBASEDIR="/root/twitter_pipeline_results_debug"
 # LOGBASEDIR="/root/pipeline_debug_extract"
 NODES=16
 mkdir -p $LOGBASEDIR
@@ -22,15 +22,10 @@ echo $GL_OUTPUT_FILE
 GRAPHX_OUTPUT_FILE=$LOGBASEDIR/graphx_$DATE
 echo $GRAPHX_OUTPUT_FILE
 
-EXTRACT_GRAPH_COMMAND="/root/graphx/bin/run-example \
-  org.apache.spark.graphx.WikiPipelineBenchmark \
-  $SPARK extract $HDFS$DATASET $HDFS$OUTBASE"
-# EXTRACT_GRAPH_COMMAND="echo EXTRACTING"
-
 graphlab_pipeline() {
   echo $GL_OUTPUT_FILE
   echo -e "\n\n\b Starting Pipeline\n" >> $GL_OUTPUT_FILE
-  $TIME -f "EXTRACT_TIMEX: %e seconds" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
+  # $TIME -f "EXTRACT_TIMEX: %e seconds" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
   for i in $(seq 1 $NUMSTAGES)
   do
     start=`date "+%s"`
@@ -43,7 +38,6 @@ graphlab_pipeline() {
       --saveprefix=$HDFS$OUTBASE-prs_del_$i"
     $TIME -f "PR_TIMEX: %e seconds" $GRAPHLAB_PR_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
       
-    # Don't forget to append iter to end of save prefec
     GRAPHLAB_CC_COMMAND="mpiexec --hostfile /root/ephemeral-hdfs/conf/slaves -n $NODES \
       env CLASSPATH=$(hadoop classpath) \
       $GRAPHLAB/release/toolkits/graph_analytics/connected_component \
@@ -53,7 +47,7 @@ graphlab_pipeline() {
     $TIME -f "CC_TIMEX: %e seconds" $GRAPHLAB_CC_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
 
     ANALYZE_RESULTS_COMMAND="/root/graphx/bin/run-example \
-      org.apache.spark.graphx.WikiPipelineBenchmark \
+      org.apache.spark.graphx.TwitterPipelineBenchmark \
       $SPARK analyze $HDFS$OUTBASE $i 0"
 
     $TIME -f "ANALYZE_TIMEX: %e seconds" $ANALYZE_RESULTS_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
@@ -62,7 +56,7 @@ graphlab_pipeline() {
 
     end=`date "+%s"`
     dur=$(( end - start ))
-    echo TOTAL_TIMEX iteration "$i": $dur | tee -a $GL_OUTPUT_FILE
+    echo TOTAL_TIMEX iteration $i $dur | tee -a $GL_OUTPUT_FILE
   done
 }
 
@@ -70,7 +64,6 @@ graphlab_pipeline() {
 giraph_pipeline() {
   echo $GIRAPH_OUTPUT_FILE
   echo -e "\n\n\b Starting Pipeline\n" >> $GIRAPH_OUTPUT_FILE
-  $TIME -f "EXTRACT_TIMEX: %e seconds" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $GIRAPH_OUTPUT_FILE
   for i in $(seq 1 $NUMSTAGES)
   do
     start=`date "+%s"`
@@ -100,15 +93,15 @@ giraph_pipeline() {
     $TIME -f "CC_TIMEX: %e seconds" $GIRAPH_CC_COMMAND 2>&1 | tee -a $GIRAPH_OUTPUT_FILE
 
     ANALYZE_RESULTS_COMMAND="/root/graphx/bin/run-example \
-      org.apache.spark.graphx.WikiPipelineBenchmark \
+      org.apache.spark.graphx.TwitterPipelineBenchmark \
       $SPARK analyze $HDFS$OUTBASE $i 1"
 
-    $TIME -f "ANALYZE_TIMEX: %e seconds" $ANALYZE_RESULTS_COMMAND 2>&1 | tee -a $GL_OUTPUT_FILE
+    $TIME -f "ANALYZE_TIMEX: %e seconds" $ANALYZE_RESULTS_COMMAND 2>&1 | tee -a $GIRAPH_OUTPUT_FILE
     # hadoop dfs -rmr $HDFS$OUTBASE-ccs_del_$i* &> /dev/null
     # hadoop dfs -rmr $HDFS$OUTBASE-prs_del_$i* &> /dev/null
     end=`date "+%s"`
     dur=$(( end - start ))
-    echo TOTAL_TIMEX iteration $i: $dur | tee -a $GL_OUTPUT_FILE
+    echo TOTAL_TIMEX iteration $i $dur | tee -a $GIRAPH_OUTPUT_FILE
   done
 }
 
@@ -119,7 +112,7 @@ graphx_pipeline() {
   echo -e "\n\n\b Starting Pipeline\n" >> $GRAPHX_OUTPUT_FILE
 
   GRAPHX_COMMAND="/root/graphx/bin/run-example \
-    org.apache.spark.graphx.WikiPipelineBenchmark \
+    org.apache.spark.graphx.TwitterPipelineBenchmark \
     $SPARK graphx $HDFS$DATASET $NUMSTAGES \
     $PR_ITERATIONS"
     $TIME -f "TOTAL_PIPELINE_TIMEX_internal: %e seconds"  $GRAPHX_COMMAND 2>&1 | tee -a $GRAPHX_OUTPUT_FILE
@@ -147,22 +140,22 @@ sleep 10
 # $TIME -f "EXTRACT_TIMEX: %e seconds" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $LOGBASEDIR/extract2_$DATE
 
 
-#Graphlab
-# for t in $(seq 1 $NUMSTAGES)
-# do
-#   hadoop dfs -rmr $OUTBASE* &> /dev/null
-#   pstart=`date "+%s"`
-#   graphlab_pipeline
-#   pend=`date "+%s"`
-#   pdur=$(( pend - pstart ))
-#   echo "TOTAL_PIPELINE_TIMEX trial $t: $pdur seconds" | tee -a $GL_OUTPUT_FILE
-#   ~/graphx/sbin/stop-all.sh
-#   sleep 10
-#   ~/graphx/sbin/start-all.sh
-#   sleep 10
-# done
-# touch ~/GRAPHLAB_DONE
-#
+Graphlab
+for t in $(seq 1 $NUMSTAGES)
+do
+  hadoop dfs -rmr $OUTBASE* &> /dev/null
+  pstart=`date "+%s"`
+  graphlab_pipeline
+  pend=`date "+%s"`
+  pdur=$(( pend - pstart ))
+  echo "TOTAL_PIPELINE_TIMEX trial $t: $pdur seconds" | tee -a $GL_OUTPUT_FILE
+  ~/graphx/sbin/stop-all.sh
+  sleep 10
+  ~/graphx/sbin/start-all.sh
+  sleep 10
+done
+touch ~/GRAPHLAB_DONE
+
 # #Giraph
 # for t in $(seq 1 $NUMSTAGES)
 # do
