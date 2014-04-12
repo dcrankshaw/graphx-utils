@@ -7,7 +7,7 @@ export SPARK=spark://$MASTERS:7077
 DATE=`date "+%Y%m%d.%H.%M.%S"`
 TIME=/usr/bin/time
 NUMTRIALS=2
-NUMSTAGES=3
+NUMSTAGES=5
 PR_ITERATIONS=5
 DATASET="/twitter_graph_splits"
 OUTBASE="/twitter_gp"
@@ -114,14 +114,9 @@ graphx_pipeline() {
   GRAPHX_COMMAND="/root/graphx/bin/run-example \
     org.apache.spark.graphx.TwitterPipelineBenchmark \
     $SPARK graphx $HDFS$DATASET $NUMSTAGES \
-    $PR_ITERATIONS 128"
+    $PR_ITERATIONS 64 false"
     $TIME -f "TOTAL_PIPELINE_TIMEX_internal %e"  $GRAPHX_COMMAND 2>&1 | tee -a $GRAPHX_OUTPUT_FILE
 }
-
-rm  ~/GRAPHX_DONE
-rm  ~/GRAPHLAB_DONE
-rm  ~/GIRAPH_DONE
-
 
 # ~/graphx/sbin/stop-all.sh
 # sleep 10
@@ -138,6 +133,23 @@ rm  ~/GIRAPH_DONE
 
 # hadoop dfs -rmr $OUTBASE* &> /dev/null
 # $TIME -f "EXTRACT_TIMEX: %e seconds" $EXTRACT_GRAPH_COMMAND 2>&1 | tee -a $LOGBASEDIR/extract2_$DATE
+
+
+#Graphx
+for t in $(seq 1 $NUMSTAGES)
+do
+  pstart=`date "+%s"`
+  graphx_pipeline
+  pend=`date "+%s"`
+  pdur=$(( pend - pstart ))
+  echo "TOTAL_PIPELINE_TIMEX trial $t: $pdur" | tee -a $GRAPHX_OUTPUT_FILE
+  ~/graphx/sbin/stop-all.sh
+  sleep 10
+  ~/graphx/sbin/start-all.sh
+  sleep 10
+done
+exit
+
 
 
 # Graphlab
@@ -175,21 +187,6 @@ rm  ~/GIRAPH_DONE
 #   hadoop dfs -mv /no_del_twitter $OUTBASE-edges_del_1
 # done
 # touch ~/GIRAPH_DONE
-
-#Graphx
-for t in $(seq 1 $NUMSTAGES)
-do
-  pstart=`date "+%s"`
-  graphx_pipeline
-  pend=`date "+%s"`
-  pdur=$(( pend - pstart ))
-  echo "TOTAL_PIPELINE_TIMEX trial $t: $pdur" | tee -a $GRAPHX_OUTPUT_FILE
-  ~/graphx/sbin/stop-all.sh
-  sleep 10
-  ~/graphx/sbin/start-all.sh
-  sleep 10
-done
-touch ~/GRAPHX_DONE
 
 
 
