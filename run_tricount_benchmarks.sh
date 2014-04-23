@@ -27,31 +27,31 @@ GRAPHX_TC_COMMAND="$command $class $SPARK triangles \
   --numEPart=$NUMPARTS \
   --partStrategy=EdgePartition2D"
 
-# GRAPHX_TC_FILE=$OUTPUT_DIR/graphx_tc_results_"$NUMPARTS"parts_$DATE
-# echo $GRAPHX_TC_FILE
-# echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_TC_FILE
-# echo $GRAPHX_TC_COMMAND | tee -a $GRAPHX_TC_FILE
-# ~/graphx/sbin/stop-all.sh &> /dev/null
-# sleep 10
-# ~/graphx/sbin/stop-all.sh &> /dev/null
-# ~/graphx/sbin/start-all.sh &> /dev/null
-# sleep 10
-# for xx in $(seq 1 $NUMTRIALS)
-# do
-#   # hadoop dfs -rmr /tc_del
-#   $TIME -f "TOTAL_TIMEX: %e seconds" $GRAPHX_TC_COMMAND &>> $GRAPHX_TC_FILE
-#   # hadoop dfs -rmr /tc_del
-#   echo Finished trial $xx
-#   sleep 10
-#   ~/graphx/sbin/stop-all.sh &> /dev/null
-#   sleep 10
-#   ~/graphx/sbin/stop-all.sh &> /dev/null
-#   ~/graphx/sbin/start-all.sh &> /dev/null
-#   sleep 10
-#   # sleep 60
-# done
-#
-# echo -e "\n\n FINISHED GRAPHX\n\n"
+GRAPHX_TC_FILE=$OUTPUT_DIR/graphx_tc_results_"$NUMPARTS"parts_$DATE
+echo $GRAPHX_TC_FILE
+echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_TC_FILE
+echo $GRAPHX_TC_COMMAND | tee -a $GRAPHX_TC_FILE
+~/graphx/sbin/stop-all.sh &> /dev/null
+sleep 10
+~/graphx/sbin/stop-all.sh &> /dev/null
+~/graphx/sbin/start-all.sh &> /dev/null
+sleep 10
+for xx in $(seq 1 $NUMTRIALS)
+do
+  # hadoop dfs -rmr /tc_del
+  $TIME -f "TOTAL_TIMEX: %e seconds" $GRAPHX_TC_COMMAND &>> $GRAPHX_TC_FILE
+  # hadoop dfs -rmr /tc_del
+  echo Finished trial $xx
+  sleep 10
+  ~/graphx/sbin/stop-all.sh &> /dev/null
+  sleep 10
+  ~/graphx/sbin/stop-all.sh &> /dev/null
+  ~/graphx/sbin/start-all.sh &> /dev/null
+  sleep 10
+  # sleep 60
+done
+
+echo -e "\n\n FINISHED GRAPHX\n\n"
 
 # ######################### GraphLab #######################################
 

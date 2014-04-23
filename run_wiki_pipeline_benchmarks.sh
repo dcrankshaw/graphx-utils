@@ -130,10 +130,10 @@ rm  ~/GRAPHLAB_DONE
 rm  ~/GIRAPH_DONE
 
 
-~/graphx/sbin/stop-all.sh
-sleep 10
-~/graphx/sbin/start-all.sh
-sleep 10
+# ~/graphx/sbin/stop-all.sh
+# sleep 10
+# ~/graphx/sbin/start-all.sh
+# sleep 10
 
 # hadoop dfs -rmr $OUTBASE* &> /dev/null
 # GRAPHX_COMMAND="/root/graphx/bin/run-example \

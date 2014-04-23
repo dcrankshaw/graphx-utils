@@ -4,12 +4,12 @@
 TIME=/usr/bin/time
 NODES=16
 
-NUMTRIALS=1
+NUMTRIALS=3
 NOW=$(date)
 # SECONDS=$(date +%s)
 DATE=`date "+%Y%m%d.%H.%M.%S"`
 # SECONDS=$(date '+%H_%M')
-OUTPUT_DIR=/root/final_cc_numbers
+OUTPUT_DIR=/root/debug_cc
 mkdir -p $OUTPUT_DIR
 
 command=~/graphx/bin/run-example
@@ -21,6 +21,7 @@ NUMPARTS=64
 
 export HDFS=hdfs://$MASTERS:9000
 
+###################### GraphX #################################
 GRAPHX_CC_COMMAND="$command $class spark://$MASTERS:7077 cc \
   $HDFS/$DATASET \
   --numEPart=$NUMPARTS \
@@ -49,49 +50,17 @@ do
   sleep 10
   # sleep 60
 done
-exit
 
 echo -e "\n\n FINISHED GRAPHX\n\n" | tee ~/GRAPHX_DONE
 
-# 
-# # for xx in $(seq 1 $NUMTRIALS)
-# # do
-# #   echo $xx
-# # done
-# # exit
-# 
-# 
 # ######################### GraphLab #######################################
-# 
-# 
-# GL_PR_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
-#     CLASSPATH=$(hadoop classpath) $GRAPHLAB/release/toolkits/graph_analytics/pagerank \
-#     --graph=$HDFS/wiki_parsed3_edges --format=snap --ncpus=8 --tol=0 --iterations=20"
-# 
-# 
-# 
-# GL_TRIANGLES_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
-#     CLASSPATH=$(hadoop classpath) $GRAPHLAB/release/toolkits/graph_analytics/undirected_triangle_count \
-#     --graph=$HDFS/twitter_splits --format=snap --ncpus=8"
-# 
+
 GL_DATASET="livejournal_graph_splits"
 GL_CC_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
     CLASSPATH=$(hadoop classpath) $GRAPHLAB/release/toolkits/graph_analytics/connected_component \
     --graph=$HDFS/$GL_DATASET --format=snap --ncpus=8 \
     --saveprefix=$HDFS/cc_del"
-# 
-# # pagerank
-# GL_PR_FILE=$OUTPUT_DIR/graphlab_pr_results.txt
-# echo "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GL_PR_FILE
-# echo $GL_PR_COMMAND | tee -a $GL_PR_FILE
-# for xx in $(seq 1 $NUMTRIALS)
-# do
-#   $TIME -f "TOTAL: %e seconds" $GL_PR_COMMAND 2>&1 | tee -a $GL_PR_FILE
-#   sleep 30
-# done
-# 
-# 
-# connected components
+
 GL_CC_FILE=$OUTPUT_DIR/graphlab_cc_results_$DATE
 echo $GL_CC_FILE
 echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GL_CC_FILE
@@ -123,62 +92,39 @@ echo -e "\n\n FINISHED GRAPHLAB\n\n" | tee ~/GRAPHLAB_DONE
 # ########################### GIRAPH #####################################
 # 
 # DATASET="/livejournal_graph"
-DATASET="/livejournal_graph"
-# INPUT_FMT="org.apache.giraph.io.formats.LongNullTextEdgeInputFormat"
-INPUT_FMT="org.apache.giraph.io.formats.IntNullTextEdgeInputFormat"
-GIRAPH_CC_COMMAND="hadoop jar \
-  /root/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
-  org.apache.giraph.GiraphRunner org.apache.giraph.examples.ConnectedComponentsComputation \
-  -eif $INPUT_FMT \
-  -eip $DATASET \
-  -vof org.apache.giraph.io.formats.IdWithValueTextOutputFormat \
-  -op /cc_del \
-  -w 63"
-# 
-# GIRAPH_PR_COMMAND="hadoop jar \
-#   /usr/local/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
-#   org.apache.giraph.GiraphRunner org.apache.giraph.examples.SimplePageRankComputation \
-#   -eif org.apache.giraph.io.formats.LongDefaultFloatTextEdgeInputFormat \
-#   -eip /wiki_parsed3_edges \
+# DATASET="/livejournal_graph"
+# # INPUT_FMT="org.apache.giraph.io.formats.LongNullTextEdgeInputFormat"
+# INPUT_FMT="org.apache.giraph.io.formats.IntNullTextEdgeInputFormat"
+# GIRAPH_CC_COMMAND="hadoop jar \
+#   /root/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
+#   org.apache.giraph.GiraphRunner org.apache.giraph.examples.ConnectedComponentsComputation \
+#   -eif $INPUT_FMT \
+#   -eip $DATASET \
 #   -vof org.apache.giraph.io.formats.IdWithValueTextOutputFormat \
-#   -op /pr_del \
-#   -w 64 \
-#   -mc org.apache.giraph.examples.SimplePageRankComputation\$SimplePageRankMasterCompute"
-# 
-# # pagerank count
-# GIRAPH_PR_FILE=$OUTPUT_DIR/giraph_pr_results.txt
-# echo "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GIRAPH_PR_FILE
-# echo $GIRAPH_PR_COMMAND | tee -a $GIRAPH_PR_FILE
+#   -op /cc_del \
+#   -w 63"
+#
+#
+# GIRAPH_CC_FILE=$OUTPUT_DIR/giraph_cc_results_$DATE
+# echo $GIRAPH_CC_FILE
+# echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GIRAPH_CC_FILE
+# echo $GIRAPH_CC_COMMAND | tee -a $GIRAPH_CC_FILE
 # for xx in $(seq 1 $NUMTRIALS)
 # do
-#   hadoop dfs -rmr /pr_del
-#   $TIME -f "TOTAL: %e seconds" $GIRAPH_PR_COMMAND 2>&1 | tee -a $GIRAPH_PR_FILE
-#   hadoop dfs -rmr /pr_del
-#   sleep 60
+#   hadoop dfs -rmr /cc_del
+#   $TIME -f "TOTAL_TIMEX: %e seconds" $GIRAPH_CC_COMMAND 2>&1 | tee -a $GIRAPH_CC_FILE
+#   hadoop dfs -rmr /cc_del
+#   echo Finished iter $xx
+#   sleep 30
+#   # ~/ephemeral-hdfs/bin/stop-all.sh &> /dev/null
+#   # sleep 10
+#   # ~/ephemeral-hdfs/bin/stop-all.sh &> /dev/null
+#   # sleep 10
+#   # ~/ephemeral-hdfs/bin/start-all.sh &> /dev/null
+#   # sleep 10
 # done
-# 
-
-
-GIRAPH_CC_FILE=$OUTPUT_DIR/giraph_cc_results_$DATE
-echo $GIRAPH_CC_FILE
-echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GIRAPH_CC_FILE
-echo $GIRAPH_CC_COMMAND | tee -a $GIRAPH_CC_FILE
-for xx in $(seq 1 $NUMTRIALS)
-do
-  hadoop dfs -rmr /cc_del
-  $TIME -f "TOTAL_TIMEX: %e seconds" $GIRAPH_CC_COMMAND 2>&1 | tee -a $GIRAPH_CC_FILE
-  hadoop dfs -rmr /cc_del
-  echo Finished iter $xx
-  sleep 30
-  # ~/ephemeral-hdfs/bin/stop-all.sh &> /dev/null
-  # sleep 10
-  # ~/ephemeral-hdfs/bin/stop-all.sh &> /dev/null
-  # sleep 10
-  # ~/ephemeral-hdfs/bin/start-all.sh &> /dev/null
-  # sleep 10
-done
-
-echo -e "\n\n FINISHED GIRAPH\n\n" | tee ~/GIRAPH_DONE
+#
+# echo -e "\n\n FINISHED GIRAPH\n\n" | tee ~/GIRAPH_DONE
 
 ################################# DataFlow Pagerank #################################
 

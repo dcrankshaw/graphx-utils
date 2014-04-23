@@ -6,7 +6,7 @@ NODES=16
 export SPARK=spark://$MASTERS:7077
 export HDFS=hdfs://$MASTERS:9000
 
-NUMTRIALS=1
+NUMTRIALS=3
 NOW=$(date)
 # SECONDS=$(date +%s)
 DATE=`date "+%Y%m%d.%H.%M.%S"`
@@ -53,7 +53,7 @@ do
   # sleep 60
 done
 
-echo -e "\n\n FINISHED GRAPHX\n\n" | tee ~/GRAPHX_DONE
+echo -e "\n\n FINISHED GRAPHX\n\n"
 
 # ######################### GraphLab #######################################
 
@@ -79,37 +79,37 @@ do
   sleep 30
 done
 
-echo -e "\n\n FINISHED GRAPHLAB\n\n" | tee ~/GRAPHLAB_DONE
+echo -e "\n\n FINISHED GRAPHLAB\n\n" 
 exit
 
 
 # ########################### GIRAPH #####################################
 # 
-DATASET="twitter_graph-splits"
-
-GIRAPH_PR_COMMAND="hadoop jar \
-  /root/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
-  org.apache.giraph.GiraphRunner org.apache.giraph.examples.SimplePageRankComputation \
-  -eif org.apache.giraph.io.formats.LongDefaultFloatTextEdgeInputFormat \
-  -eip $HDFS/$DATASET/ \
-  -vof org.apache.giraph.io.formats.IdWithValueTextOutputFormat \
-  -op $HDFS/pr_del \
-  -w 63 \
-  -mc org.apache.giraph.examples.SimplePageRankComputation\$SimplePageRankMasterCompute"
-
-
-GIRAPH_PR_FILE=$OUTPUT_DIR/giraph_pr_results_$DATE
-echo $GIRAPH_PR_FILE
-echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GIRAPH_PR_FILE
-echo $GIRAPH_PR_COMMAND | tee -a $GIRAPH_PR_FILE
-for xx in $(seq 1 $NUMTRIALS)
-do
-  hadoop dfs -rmr /pr_del
-  $TIME -f "TOTAL_TIMEX: %e seconds" $GIRAPH_PR_COMMAND 2>&1 | tee -a $GIRAPH_PR_FILE
-  hadoop dfs -rmr /pr_del
-  echo Finished trial $xx
-  sleep 30
-done
-
-echo -e "\n\n FINISHED GIRAPH\n\n" | tee ~/GIRAPH_DONE
+# DATASET="twitter_graph-splits"
+#
+# GIRAPH_PR_COMMAND="hadoop jar \
+#   /root/giraph/giraph-examples/target/giraph-examples-1.1.0-SNAPSHOT-for-hadoop-0.20.203.0-jar-with-dependencies.jar \
+#   org.apache.giraph.GiraphRunner org.apache.giraph.examples.SimplePageRankComputation \
+#   -eif org.apache.giraph.io.formats.LongDefaultFloatTextEdgeInputFormat \
+#   -eip $HDFS/$DATASET/ \
+#   -vof org.apache.giraph.io.formats.IdWithValueTextOutputFormat \
+#   -op $HDFS/pr_del \
+#   -w 63 \
+#   -mc org.apache.giraph.examples.SimplePageRankComputation\$SimplePageRankMasterCompute"
+#
+#
+# GIRAPH_PR_FILE=$OUTPUT_DIR/giraph_pr_results_$DATE
+# echo $GIRAPH_PR_FILE
+# echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GIRAPH_PR_FILE
+# echo $GIRAPH_PR_COMMAND | tee -a $GIRAPH_PR_FILE
+# for xx in $(seq 1 $NUMTRIALS)
+# do
+#   hadoop dfs -rmr /pr_del
+#   $TIME -f "TOTAL_TIMEX: %e seconds" $GIRAPH_PR_COMMAND 2>&1 | tee -a $GIRAPH_PR_FILE
+#   hadoop dfs -rmr /pr_del
+#   echo Finished trial $xx
+#   sleep 30
+# done
+#
+# echo -e "\n\n FINISHED GIRAPH\n\n" | tee ~/GIRAPH_DONE
 

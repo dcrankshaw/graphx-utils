@@ -6,12 +6,12 @@ NODES=16
 export SPARK=spark://$MASTERS:7077
 export HDFS=hdfs://$MASTERS:9000
 
-NUMTRIALS=1
+NUMTRIALS=3
 NOW=$(date)
 # SECONDS=$(date +%s)
 DATE=`date "+%Y%m%d.%H.%M.%S"`
 # SECONDS=$(date '+%H_%M')
-OUTPUT_DIR=/root/debug_kcore_numbers
+OUTPUT_DIR=/root/debug2_kcore_numbers
 mkdir -p $OUTPUT_DIR
 
 command=~/graphx/bin/run-example
@@ -25,7 +25,8 @@ NUMPARTS=64
 GRAPHX_KCORE_COMMAND="$command $class $SPARK kcore \
   $HDFS/$GX_DATASET \
   --numEPart=$NUMPARTS \
-  --kmax=4 --partStrategy=EdgePartition2D"
+  --kmax=4 --kmin=1"
+  # --partStrategy=EdgePartition2D"
 
 GRAPHX_KCORE_FILE=$OUTPUT_DIR/graphx_kcore_results_"$NUMPARTS"parts_$DATE
 echo $GRAPHX_KCORE_FILE
@@ -52,7 +53,7 @@ do
 done
 
 echo -e "\n\n FINISHED GRAPHX\n\n"
-exit
+# exit
 
 # ######################### GraphLab #######################################
 
@@ -61,7 +62,7 @@ GL_KCORE_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES \
     env CLASSPATH=$(hadoop classpath) \
     $GRAPHLAB/release/toolkits/graph_analytics/kcore \
     --graph=$HDFS/$GL_DATASET --format=snap --ncpus=8 \
-    --kmin=0 --kmax=4 --savecores=$HDFS/kcore_del"
+    --kmin=1 --kmax=4 --savecores=$HDFS/kcore_del"
 
 
 GL_KCORE_FILE=$OUTPUT_DIR/graphlab_kcore_results_$DATE
