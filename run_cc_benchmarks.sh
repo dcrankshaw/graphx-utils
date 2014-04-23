@@ -30,6 +30,10 @@ GRAPHX_CC_COMMAND="$command $class spark://$MASTERS:7077 cc \
 GRAPHX_CC_FILE=$OUTPUT_DIR/graphx_cc_results_"$NUMPARTS"parts_$DATE
 echo $GRAPHX_CC_FILE
 echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_CC_FILE
+cd ~/graphx
+GRAPHX_SHA=`git rev-parse HEAD`
+cd -
+echo $GRAPHX_SHA >> $GRAPHX_CC_FILE
 echo $GRAPHX_CC_COMMAND | tee -a $GRAPHX_CC_FILE
 ~/graphx/sbin/stop-all.sh &> /dev/null
 sleep 10

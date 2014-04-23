@@ -11,7 +11,7 @@ NOW=$(date)
 # SECONDS=$(date +%s)
 DATE=`date "+%Y%m%d.%H.%M.%S"`
 # SECONDS=$(date '+%H_%M')
-OUTPUT_DIR=/root/debug2_kcore_numbers
+OUTPUT_DIR=/root/debug_kcore_numbers
 mkdir -p $OUTPUT_DIR
 
 command=~/graphx/bin/run-example
@@ -31,6 +31,10 @@ GRAPHX_KCORE_COMMAND="$command $class $SPARK kcore \
 GRAPHX_KCORE_FILE=$OUTPUT_DIR/graphx_kcore_results_"$NUMPARTS"parts_$DATE
 echo $GRAPHX_KCORE_FILE
 echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_KCORE_FILE
+cd ~/graphx
+GRAPHX_SHA=`git rev-parse HEAD`
+cd -
+echo $GRAPHX_SHA >> $GRAPHX_KCORE_FILE
 echo $GRAPHX_KCORE_COMMAND | tee -a $GRAPHX_KCORE_FILE
 ~/graphx/sbin/stop-all.sh &> /dev/null
 sleep 10

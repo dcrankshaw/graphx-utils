@@ -30,6 +30,10 @@ GRAPHX_TC_COMMAND="$command $class $SPARK triangles \
 GRAPHX_TC_FILE=$OUTPUT_DIR/graphx_tc_results_"$NUMPARTS"parts_$DATE
 echo $GRAPHX_TC_FILE
 echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_TC_FILE
+cd ~/graphx
+GRAPHX_SHA=`git rev-parse HEAD`
+cd -
+echo $GRAPHX_SHA >> $GRAPHX_TC_FILE
 echo $GRAPHX_TC_COMMAND | tee -a $GRAPHX_TC_FILE
 ~/graphx/sbin/stop-all.sh &> /dev/null
 sleep 10

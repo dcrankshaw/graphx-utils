@@ -32,6 +32,10 @@ GRAPHX_PR_COMMAND="$command $class $SPARK pagerank \
 GRAPHX_PR_FILE=$OUTPUT_DIR/graphx_pr_results_"$NUMPARTS"parts_$DATE
 echo $GRAPHX_PR_FILE
 echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_PR_FILE
+cd ~/graphx
+GRAPHX_SHA=`git rev-parse HEAD`
+cd -
+echo $GRAPHX_SHA >> $GRAPHX_PR_FILE
 echo $GRAPHX_PR_COMMAND | tee -a $GRAPHX_PR_FILE
 ~/graphx/sbin/stop-all.sh &> /dev/null
 sleep 10
