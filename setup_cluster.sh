@@ -2,19 +2,26 @@
 
 /root/spark/sbin/stop-all.sh
 # rm -rf /root/default-spark
-# /root/spark/sbin/slaves.sh rm -rf /root/spark
+/root/spark/sbin/slaves.sh rm -rf /root/spark
 # mv ~/spark ~/default-spark
+rm -rf /tmp/*
+
+# cp ~/spark/conf/* /wiki_full/graphx/conf/
 cp ~/spark/conf/* ~/graphx/conf/
+rm -rf /wiki_full/spark
+mv ~/spark /wiki_full
+# mv /wiki_full/graphx ~/
 ~/ephemeral-hdfs/bin/stop-all.sh
 ~/spark-ec2/copy-dir ~/ephemeral-hdfs/
 ~/ephemeral-hdfs/bin/start-all.sh
-mount /dev/sdj /wiki_full
-mount /dev/sdk /graph_data
+# mount /dev/sdj /wiki_full
+# mount /dev/sdk /graph_data
+~/graphx-utils/rebuild-graphx
+# exit
 
 hadoop dfs -put /wiki_full/twitter/twitter_graph_splits/ /twitter_graph_splits
 hadoop dfs -put /wiki_full/twitter/twitter_vertices /twitter_vertices
-cd ~/incubator-spark; sbt/sbt assembly
-~/graphx-utils/rebuild-graphx
+# cd ~/incubator-spark; sbt/sbt assembly
 
 #### Setup graphlab
 yum install -y openmpi-devel zlib-devel cmake

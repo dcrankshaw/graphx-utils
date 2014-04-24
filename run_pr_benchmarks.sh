@@ -18,7 +18,7 @@ PR_ITERS=20
 command=~/graphx/bin/run-example
 class=org.apache.spark.graphx.lib.Analytics
 # DATASET="livejournal_graph_splits/part*"
-GX_DATASET="twitter_graph-splits/part*"
+GX_DATASET="twitter_graph_splits/part*"
 # DATASET="livejournal_graph"
 NUMPARTS=64
 
@@ -61,7 +61,7 @@ echo -e "\n\n FINISHED GRAPHX\n\n"
 
 # ######################### GraphLab #######################################
 
-GL_DATASET="twitter_graph-splits"
+GL_DATASET="twitter_graph_splits"
 
 GL_PR_COMMAND="mpiexec --hostfile /root/ephemeral-hdfs/conf/slaves -n $NODES \
     env CLASSPATH=$(hadoop classpath) \
