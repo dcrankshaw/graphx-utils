@@ -15,7 +15,7 @@ OUTPUT_DIR=/root/debug_pr_numbers
 mkdir -p $OUTPUT_DIR
 PR_ITERS=20
 
-command=~/graphx/bin/run-example
+command=/mnt/graphx/bin/run-example
 class=org.apache.spark.graphx.lib.Analytics
 # DATASET="livejournal_graph_splits/part*"
 GX_DATASET="twitter_graph_splits/part*"
@@ -26,21 +26,22 @@ NUMPARTS=64
 GRAPHX_PR_COMMAND="$command $class $SPARK pagerank \
   $HDFS/$GX_DATASET \
   --numEPart=$NUMPARTS \
-  --numIters=$PR_ITERS \
+  --numIter=$PR_ITERS \
   --partStrategy=EdgePartition2D"
 
 GRAPHX_PR_FILE=$OUTPUT_DIR/graphx_pr_results_"$NUMPARTS"parts_$DATE
 echo $GRAPHX_PR_FILE
 echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_PR_FILE
-cd ~/graphx
-GRAPHX_SHA=`git rev-parse HEAD`
+cd /mnt/graphx
+# GRAPHX_SHA=`git rev-parse HEAD`
+GRAPHX_SHA=`git log -1 --decorate`
 cd -
 echo $GRAPHX_SHA >> $GRAPHX_PR_FILE
 echo $GRAPHX_PR_COMMAND | tee -a $GRAPHX_PR_FILE
-~/graphx/sbin/stop-all.sh &> /dev/null
+/mnt/graphx/sbin/stop-all.sh &> /dev/null
 sleep 10
-~/graphx/sbin/stop-all.sh &> /dev/null
-~/graphx/sbin/start-all.sh &> /dev/null
+/mnt/graphx/sbin/stop-all.sh &> /dev/null
+/mnt/graphx/sbin/start-all.sh &> /dev/null
 sleep 10
 for xx in $(seq 1 $NUMTRIALS)
 do
@@ -49,10 +50,10 @@ do
   # hadoop dfs -rmr /pr_del
   echo Finished trial $xx
   sleep 10
-  ~/graphx/sbin/stop-all.sh &> /dev/null
+  /mnt/graphx/sbin/stop-all.sh &> /dev/null
   sleep 10
-  ~/graphx/sbin/stop-all.sh &> /dev/null
-  ~/graphx/sbin/start-all.sh &> /dev/null
+  /mnt/graphx/sbin/stop-all.sh &> /dev/null
+  /mnt/graphx/sbin/start-all.sh &> /dev/null
   sleep 10
   # sleep 60
 done

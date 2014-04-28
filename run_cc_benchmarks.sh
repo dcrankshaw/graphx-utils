@@ -12,12 +12,12 @@ DATE=`date "+%Y%m%d.%H.%M.%S"`
 OUTPUT_DIR=/root/debug_cc
 mkdir -p $OUTPUT_DIR
 
-command=~/graphx/bin/run-example
+command=/mnt/graphx/bin/run-example
 class=org.apache.spark.graphx.lib.Analytics
 # DATASET="livejournal_graph_splits/part*"
 DATASET="twitter_graph_splits/part*"
 # DATASET="livejournal_graph"
-NUMPARTS=64
+NUMPARTS=128
 
 export HDFS=hdfs://$MASTERS:9000
 
@@ -30,15 +30,16 @@ GRAPHX_CC_COMMAND="$command $class spark://$MASTERS:7077 cc \
 GRAPHX_CC_FILE=$OUTPUT_DIR/graphx_cc_results_"$NUMPARTS"parts_$DATE
 echo $GRAPHX_CC_FILE
 echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_CC_FILE
-cd ~/graphx
-GRAPHX_SHA=`git rev-parse HEAD`
+cd /mnt/graphx
+# GRAPHX_SHA=`git rev-parse HEAD`
+GRAPHX_SHA=`git log -1 --decorate`
 cd -
 echo $GRAPHX_SHA >> $GRAPHX_CC_FILE
 echo $GRAPHX_CC_COMMAND | tee -a $GRAPHX_CC_FILE
-~/graphx/sbin/stop-all.sh &> /dev/null
+/mnt/graphx/sbin/stop-all.sh &> /dev/null
 sleep 10
-~/graphx/sbin/stop-all.sh &> /dev/null
-~/graphx/sbin/start-all.sh &> /dev/null
+/mnt/graphx/sbin/stop-all.sh &> /dev/null
+/mnt/graphx/sbin/start-all.sh &> /dev/null
 sleep 10
 for xx in $(seq 1 $NUMTRIALS)
 do
@@ -47,19 +48,20 @@ do
   # hadoop dfs -rmr /cc_del
   echo Finished iter $xx
   sleep 10
-  ~/graphx/sbin/stop-all.sh &> /dev/null
+  /mnt/graphx/sbin/stop-all.sh &> /dev/null
   sleep 10
-  ~/graphx/sbin/stop-all.sh &> /dev/null
-  ~/graphx/sbin/start-all.sh &> /dev/null
+  /mnt/graphx/sbin/stop-all.sh &> /dev/null
+  /mnt/graphx/sbin/start-all.sh &> /dev/null
   sleep 10
   # sleep 60
 done
 
 echo -e "\n\n FINISHED GRAPHX\n\n" | tee ~/GRAPHX_DONE
+exit
 
 # ######################### GraphLab #######################################
 
-GL_DATASET="livejournal_graph_splits"
+GL_DATASET="twitter_graph_splits"
 GL_CC_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
     CLASSPATH=$(hadoop classpath) $GRAPHLAB/release/toolkits/graph_analytics/connected_component \
     --graph=$HDFS/$GL_DATASET --format=snap --ncpus=8 \

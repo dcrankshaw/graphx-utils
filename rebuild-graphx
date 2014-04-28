@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 
-~/graphx/sbin/stop-all.sh
+/mnt/graphx/sbin/stop-all.sh
 sleep 10
-~/graphx/sbin/stop-all.sh
+/mnt/graphx/sbin/stop-all.sh
+# mv ~/graphx /mnt
+# rm -rf ~/graphx
 # if [ -z "$1" ]
 #   then
-cd ~/graphx; sbt/sbt assembly;
+cd /mnt/graphx; sbt/sbt assembly;
+# cp -r /mnt/graphx ~/
 # fi
-~/spark-ec2/copy-dir --delete ~/graphx
+~/spark-ec2/copy-dir --delete /mnt/graphx
 sleep 20
-~/graphx/sbin/start-all.sh
+/mnt/graphx/sbin/start-all.sh
 
 
 

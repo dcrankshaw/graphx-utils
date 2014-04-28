@@ -14,7 +14,7 @@ DATE=`date "+%Y%m%d.%H.%M.%S"`
 OUTPUT_DIR=/root/debug_kcore_numbers
 mkdir -p $OUTPUT_DIR
 
-command=~/graphx/bin/run-example
+command=/mnt/graphx/bin/run-example
 class=org.apache.spark.graphx.lib.Analytics
 # DATASET="livejournal_graph_splits/part*"
 GX_DATASET="twitter_graph_splits/part*"
@@ -31,15 +31,16 @@ GRAPHX_KCORE_COMMAND="$command $class $SPARK kcore \
 GRAPHX_KCORE_FILE=$OUTPUT_DIR/graphx_kcore_results_"$NUMPARTS"parts_$DATE
 echo $GRAPHX_KCORE_FILE
 echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_KCORE_FILE
-cd ~/graphx
-GRAPHX_SHA=`git rev-parse HEAD`
+cd /mnt/graphx
+# GRAPHX_SHA=`git rev-parse HEAD`
+GRAPHX_SHA=`git log -1 --decorate`
 cd -
 echo $GRAPHX_SHA >> $GRAPHX_KCORE_FILE
 echo $GRAPHX_KCORE_COMMAND | tee -a $GRAPHX_KCORE_FILE
-~/graphx/sbin/stop-all.sh &> /dev/null
+/mnt/graphx/sbin/stop-all.sh &> /dev/null
 sleep 10
-~/graphx/sbin/stop-all.sh &> /dev/null
-~/graphx/sbin/start-all.sh &> /dev/null
+/mnt/graphx/sbin/stop-all.sh &> /dev/null
+/mnt/graphx/sbin/start-all.sh &> /dev/null
 sleep 10
 for xx in $(seq 1 $NUMTRIALS)
 do
@@ -48,10 +49,10 @@ do
   # hadoop dfs -rmr /kcore_del
   echo Finished trial $xx
   sleep 10
-  ~/graphx/sbin/stop-all.sh &> /dev/null
+  /mnt/graphx/sbin/stop-all.sh &> /dev/null
   sleep 10
-  ~/graphx/sbin/stop-all.sh &> /dev/null
-  ~/graphx/sbin/start-all.sh &> /dev/null
+  /mnt/graphx/sbin/stop-all.sh &> /dev/null
+  /mnt/graphx/sbin/start-all.sh &> /dev/null
   sleep 10
   # sleep 60
 done
