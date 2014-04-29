@@ -2,7 +2,6 @@
 
 
 TIME=/usr/bin/time
-NODES=16
 export SPARK=spark://$MASTERS:7077
 export HDFS=hdfs://$MASTERS:9000
 
@@ -19,7 +18,7 @@ class=org.apache.spark.graphx.lib.Analytics
 # DATASET="livejournal_graph_splits/part*"
 GX_DATASET="twitter_graph_splits/part*"
 # DATASET="livejournal_graph"
-NUMPARTS=64
+NUMPARTS=128
 
 
 GRAPHX_KCORE_COMMAND="$command $class $SPARK kcore \
@@ -63,14 +62,18 @@ echo -e "\n\n FINISHED GRAPHX\n\n"
 # ######################### GraphLab #######################################
 
 GL_DATASET="twitter_graph_splits"
+
+NODES=16
+CPUS=8
 GL_KCORE_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES \
     env CLASSPATH=$(hadoop classpath) \
     $GRAPHLAB/release/toolkits/graph_analytics/kcore \
-    --graph=$HDFS/$GL_DATASET --format=snap --ncpus=8 \
+    --graph=$HDFS/$GL_DATASET --format=snap --ncpus=$CPUS \
+    --graph_opts=ingress=random \
     --kmin=1 --kmax=4 --savecores=$HDFS/kcore_del"
 
 
-GL_KCORE_FILE=$OUTPUT_DIR/graphlab_kcore_results_$DATE
+GL_KCORE_FILE=$OUTPUT_DIR/graphlab_kcore_nodes$NODES-cpus$CPUS-$DATE
 echo $GL_KCORE_FILE
 echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GL_KCORE_FILE
 echo $GL_KCORE_COMMAND | tee -a $GL_KCORE_FILE

@@ -2,7 +2,6 @@
 
 
 TIME=/usr/bin/time
-NODES=16
 export SPARK=spark://$MASTERS:7077
 export HDFS=hdfs://$MASTERS:9000
 
@@ -20,58 +19,61 @@ class=org.apache.spark.graphx.lib.Analytics
 # DATASET="livejournal_graph_splits/part*"
 GX_DATASET="twitter_graph_splits/part*"
 # DATASET="livejournal_graph"
-NUMPARTS=64
+NUMPARTS=128
 
 
-GRAPHX_PR_COMMAND="$command $class $SPARK pagerank \
-  $HDFS/$GX_DATASET \
-  --numEPart=$NUMPARTS \
-  --numIter=$PR_ITERS \
-  --partStrategy=EdgePartition2D"
-
-GRAPHX_PR_FILE=$OUTPUT_DIR/graphx_pr_results_"$NUMPARTS"parts_$DATE
-echo $GRAPHX_PR_FILE
-echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_PR_FILE
-cd /mnt/graphx
-# GRAPHX_SHA=`git rev-parse HEAD`
-GRAPHX_SHA=`git log -1 --decorate`
-cd -
-echo $GRAPHX_SHA >> $GRAPHX_PR_FILE
-echo $GRAPHX_PR_COMMAND | tee -a $GRAPHX_PR_FILE
-/mnt/graphx/sbin/stop-all.sh &> /dev/null
-sleep 10
-/mnt/graphx/sbin/stop-all.sh &> /dev/null
-/mnt/graphx/sbin/start-all.sh &> /dev/null
-sleep 10
-for xx in $(seq 1 $NUMTRIALS)
-do
-  # hadoop dfs -rmr /pr_del
-  $TIME -f "TOTAL_TIMEX: %e seconds" $GRAPHX_PR_COMMAND &>> $GRAPHX_PR_FILE
-  # hadoop dfs -rmr /pr_del
-  echo Finished trial $xx
-  sleep 10
-  /mnt/graphx/sbin/stop-all.sh &> /dev/null
-  sleep 10
-  /mnt/graphx/sbin/stop-all.sh &> /dev/null
-  /mnt/graphx/sbin/start-all.sh &> /dev/null
-  sleep 10
-  # sleep 60
-done
-
-echo -e "\n\n FINISHED GRAPHX\n\n"
+# GRAPHX_PR_COMMAND="$command $class $SPARK pagerank \
+#   $HDFS/$GX_DATASET \
+#   --numEPart=$NUMPARTS \
+#   --numIter=$PR_ITERS"
+#   # --partStrategy=EdgePartition2D"
+#
+# GRAPHX_PR_FILE=$OUTPUT_DIR/graphx_pr_results_"$NUMPARTS"parts_$DATE
+# echo $GRAPHX_PR_FILE
+# echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_PR_FILE
+# cd /mnt/graphx
+# # GRAPHX_SHA=`git rev-parse HEAD`
+# GRAPHX_SHA=`git log -1 --decorate`
+# cd -
+# echo $GRAPHX_SHA >> $GRAPHX_PR_FILE
+# echo $GRAPHX_PR_COMMAND | tee -a $GRAPHX_PR_FILE
+# /mnt/graphx/sbin/stop-all.sh &> /dev/null
+# sleep 10
+# /mnt/graphx/sbin/stop-all.sh &> /dev/null
+# /mnt/graphx/sbin/start-all.sh &> /dev/null
+# sleep 10
+# for xx in $(seq 1 $NUMTRIALS)
+# do
+#   # hadoop dfs -rmr /pr_del
+#   $TIME -f "TOTAL_TIMEX: %e seconds" $GRAPHX_PR_COMMAND &>> $GRAPHX_PR_FILE
+#   # hadoop dfs -rmr /pr_del
+#   echo Finished trial $xx
+#   sleep 10
+#   /mnt/graphx/sbin/stop-all.sh &> /dev/null
+#   sleep 10
+#   /mnt/graphx/sbin/stop-all.sh &> /dev/null
+#   /mnt/graphx/sbin/start-all.sh &> /dev/null
+#   sleep 10
+#   # sleep 60
+# done
+#
+# echo -e "\n\n FINISHED GRAPHX\n\n"
 
 # ######################### GraphLab #######################################
 
 GL_DATASET="twitter_graph_splits"
 
+NODES=16
+CPUS=8
 GL_PR_COMMAND="mpiexec --hostfile /root/ephemeral-hdfs/conf/slaves -n $NODES \
     env CLASSPATH=$(hadoop classpath) \
   $GRAPHLAB/release/toolkits/graph_analytics/pagerank \
   --graph=$HDFS/$GL_DATASET \
-  --format=snap --ncpus=8 --tol=0 --iterations=$PR_ITERS \
+  --format=snap --ncpus=$CPUS --tol=0 --iterations=$PR_ITERS \
+  --graph_opts=ingress=random \
   --saveprefix=$HDFS/pr_del"
 
-GL_PR_FILE=$OUTPUT_DIR/graphlab_pr_results_$DATE
+GL_PR_FILE=$OUTPUT_DIR/graphlab_pr_nodes$NODES-cpus$CPUS-$DATE
 echo $GL_PR_FILE
 echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GL_PR_FILE
 echo $GL_PR_COMMAND | tee -a $GL_PR_FILE
