@@ -16,19 +16,20 @@ PR_ITERS=20
 
 command=/mnt/graphx/bin/run-example
 class=org.apache.spark.graphx.lib.Analytics
-# DATASET="livejournal_graph_splits/part*"
+# GX_DATASET="lj_graph_splits/part*"
+# NUMPARTS=64
 GX_DATASET="twitter_graph_splits/part*"
-# DATASET="livejournal_graph"
 NUMPARTS=128
+PART_STRAT=EdgePartition1D
 
 
 # GRAPHX_PR_COMMAND="$command $class $SPARK pagerank \
 #   $HDFS/$GX_DATASET \
 #   --numEPart=$NUMPARTS \
-#   --numIter=$PR_ITERS"
-#   # --partStrategy=EdgePartition2D"
+#   --numIter=$PR_ITERS \
+#   --partStrategy=$PART_STRAT"
 #
-# GRAPHX_PR_FILE=$OUTPUT_DIR/graphx_pr_results_"$NUMPARTS"parts_$DATE
+# GRAPHX_PR_FILE=$OUTPUT_DIR/graphx_pr_"$NUMPARTS"parts_$PART_STRAT-$DATE
 # echo $GRAPHX_PR_FILE
 # echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_PR_FILE
 # cd /mnt/graphx
@@ -58,20 +59,21 @@ NUMPARTS=128
 # done
 #
 # echo -e "\n\n FINISHED GRAPHX\n\n"
+# exit
 
 # ######################### GraphLab #######################################
 
 GL_DATASET="twitter_graph_splits"
 
-NODES=16
-CPUS=8
+NODES=128
+CPUS=1
 GL_PR_COMMAND="mpiexec --hostfile /root/ephemeral-hdfs/conf/slaves -n $NODES \
     env CLASSPATH=$(hadoop classpath) \
   $GRAPHLAB/release/toolkits/graph_analytics/pagerank \
   --graph=$HDFS/$GL_DATASET \
   --format=snap --ncpus=$CPUS --tol=0 --iterations=$PR_ITERS \
-  --graph_opts=ingress=random \
-  --saveprefix=$HDFS/pr_del"
+  --graph_opts=ingress=random"
+  # --saveprefix=$HDFS/pr_del"
 
 GL_PR_FILE=$OUTPUT_DIR/graphlab_pr_nodes$NODES-cpus$CPUS-$DATE
 echo $GL_PR_FILE

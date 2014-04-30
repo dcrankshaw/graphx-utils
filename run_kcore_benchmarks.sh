@@ -27,51 +27,51 @@ GRAPHX_KCORE_COMMAND="$command $class $SPARK kcore \
   --kmax=4 --kmin=1"
   # --partStrategy=EdgePartition2D"
 
-# GRAPHX_KCORE_FILE=$OUTPUT_DIR/graphx_kcore_results_"$NUMPARTS"parts_$DATE
-# echo $GRAPHX_KCORE_FILE
-# echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_KCORE_FILE
-# cd /mnt/graphx
-# # GRAPHX_SHA=`git rev-parse HEAD`
-# GRAPHX_SHA=`git log -1 --decorate`
-# cd -
-# echo $GRAPHX_SHA >> $GRAPHX_KCORE_FILE
-# echo $GRAPHX_KCORE_COMMAND | tee -a $GRAPHX_KCORE_FILE
-# /mnt/graphx/sbin/stop-all.sh &> /dev/null
-# sleep 10
-# /mnt/graphx/sbin/stop-all.sh &> /dev/null
-# /mnt/graphx/sbin/start-all.sh &> /dev/null
-# sleep 10
-# for xx in $(seq 1 $NUMTRIALS)
-# do
-#   # hadoop dfs -rmr /kcore_del
-#   $TIME -f "TOTAL_TIMEX: %e seconds" $GRAPHX_KCORE_COMMAND &>> $GRAPHX_KCORE_FILE
-#   # hadoop dfs -rmr /kcore_del
-#   echo Finished trial $xx
-#   sleep 10
-#   /mnt/graphx/sbin/stop-all.sh &> /dev/null
-#   sleep 10
-#   /mnt/graphx/sbin/stop-all.sh &> /dev/null
-#   /mnt/graphx/sbin/start-all.sh &> /dev/null
-#   sleep 10
-#   # sleep 60
-# done
-#
-# echo -e "\n\n FINISHED GRAPHX\n\n"
+GRAPHX_KCORE_FILE=$OUTPUT_DIR/graphx_kcore_results_"$NUMPARTS"parts_$DATE
+echo $GRAPHX_KCORE_FILE
+echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" | tee -a $GRAPHX_KCORE_FILE
+cd /mnt/graphx
+# GRAPHX_SHA=`git rev-parse HEAD`
+GRAPHX_SHA=`git log -1 --decorate`
+cd -
+echo $GRAPHX_SHA >> $GRAPHX_KCORE_FILE
+echo $GRAPHX_KCORE_COMMAND | tee -a $GRAPHX_KCORE_FILE
+/mnt/graphx/sbin/stop-all.sh &> /dev/null
+sleep 10
+/mnt/graphx/sbin/stop-all.sh &> /dev/null
+/mnt/graphx/sbin/start-all.sh &> /dev/null
+sleep 10
+for xx in $(seq 1 $NUMTRIALS)
+do
+  # hadoop dfs -rmr /kcore_del
+  $TIME -f "TOTAL_TIMEX: %e seconds" $GRAPHX_KCORE_COMMAND &>> $GRAPHX_KCORE_FILE
+  # hadoop dfs -rmr /kcore_del
+  echo Finished trial $xx
+  sleep 10
+  /mnt/graphx/sbin/stop-all.sh &> /dev/null
+  sleep 10
+  /mnt/graphx/sbin/stop-all.sh &> /dev/null
+  /mnt/graphx/sbin/start-all.sh &> /dev/null
+  sleep 10
+  # sleep 60
+done
+
+echo -e "\n\n FINISHED GRAPHX\n\n"
 # exit
 
 # ######################### GraphLab #######################################
 
 GL_DATASET="twitter_graph_splits"
 
-NODES=128
-CPUS=1
+NODES=16
+CPUS=8
 GL_KCORE_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES \
     env CLASSPATH=$(hadoop classpath) \
     $GRAPHLAB/release/toolkits/graph_analytics/kcore \
     --graph=$HDFS/$GL_DATASET --format=snap --ncpus=$CPUS \
     --graph_opts=ingress=random \
-    --kmin=1 --kmax=4 \
-    --savecores=$HDFS/kcore_del"
+    --kmin=1 --kmax=4"
+    # --savecores=$HDFS/kcore_del"
 
 
 GL_KCORE_FILE=$OUTPUT_DIR/graphlab_kcore_nodes$NODES-cpus$CPUS-$DATE
@@ -87,5 +87,32 @@ do
   sleep 30
 done
 
-echo -e "\n\n FINISHED GRAPHLAB\n\n"
+
+echo -e "\n\n FINISHED GRAPHLAB SMP\n\n"
+
+NODES=128
+CPUS=1
+GL_KCORE_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES \
+    env CLASSPATH=$(hadoop classpath) \
+    $GRAPHLAB/release/toolkits/graph_analytics/kcore \
+    --graph=$HDFS/$GL_DATASET --format=snap --ncpus=$CPUS \
+    --graph_opts=ingress=random \
+    --kmin=1 --kmax=4"
+    # --savecores=$HDFS/kcore_del"
+
+
+GL_KCORE_FILE=$OUTPUT_DIR/graphlab_kcore_nodes$NODES-cpus$CPUS-$DATE
+echo $GL_KCORE_FILE
+echo -e "\n\n\nStarting New Runs: $NOW \n\n\n" >> $GL_KCORE_FILE
+echo $GL_KCORE_COMMAND | tee -a $GL_KCORE_FILE
+for xx in $(seq 1 $NUMTRIALS)
+do
+  hadoop dfs -rmr /kcore_del* &> /dev/null
+  $TIME -f "TOTAL_TIMEX: %e seconds" $GL_KCORE_COMMAND &>> $GL_KCORE_FILE
+  # hadoop dfs -rmr /kcore_del* &> /dev/null
+  echo Finished trial $xx
+  sleep 30
+done
+
+echo -e "\n\n FINISHED GRAPHLAB SINGLE-THREADED\n\n"
 

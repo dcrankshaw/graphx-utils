@@ -65,14 +65,14 @@ GL_DATASET="twitter_graph_splits"
 #     --graph=$HDFS/$GL_DATASET --format=snap --ncpus=8 \
 #     --saveprefix=$HDFS/cc_del"
 
-NODES=16
-CPUS=8
+NODES=128
+CPUS=1
 GL_CC_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES env \
     CLASSPATH=$(hadoop classpath) \
     $GRAPHLAB/release/toolkits/graph_analytics/connected_component \
     --graph=$HDFS/$GL_DATASET --format=snap --ncpus=$CPUS \
-    --graph_opts=ingress=random \
-    --saveprefix=$HDFS/cc_del"
+    --graph_opts=ingress=random"
+    # --saveprefix=$HDFS/cc_del"
 
 GL_CC_FILE=$OUTPUT_DIR/graphlab_cc_nodes$NODES-cpus$CPUS-$DATE
 echo $GL_CC_FILE

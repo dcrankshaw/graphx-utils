@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 
-mount /dev/sdj /wiki_full
-mount /dev/sdk /graph_data
-/root/spark/sbin/stop-all.sh
-# # rm -rf /root/backup_conf
-cp -r /root/spark/conf /root/backup_conf
-# # rm -rf /root/default-spark
-/root/spark/sbin/slaves.sh rm -rf /root/spark
-# # mv ~/spark ~/default-spark
-# ############rm -rf /tmp/*
-#
-cp ~/spark/conf/* /wiki_full/graphx/conf/
+# mount /dev/sdj /wiki_full
+# mount /dev/sdk /graph_data
+# /root/spark/sbin/stop-all.sh
+# # # rm -rf /root/backup_conf
+# cp -r /root/spark/conf /root/backup_conf
+# # # rm -rf /root/default-spark
+# /root/spark/sbin/slaves.sh rm -rf /root/spark
+# # # mv ~/spark ~/default-spark
+# # ############rm -rf /tmp/*
+# #
+# cp ~/spark/conf/* /wiki_full/graphx/conf/
 # # cp ~/spark/conf/* ~/graphx/conf/
 # # rm -rf /wiki_full/spark
-mv ~/spark /wiki_full
-# rm -rf /mnt/graphx
+# rm -rf /wiki_full/spark
+# mv ~/spark /wiki_full
 cp -r /wiki_full/graphx /mnt/
 ~/ephemeral-hdfs/bin/stop-all.sh
 ~/spark-ec2/copy-dir ~/ephemeral-hdfs/
@@ -40,6 +40,11 @@ ln -s /usr/lib64/openmpi/bin/* /usr/bin/.
 # cd /mnt
 # rm -rf /mnt/graphlab
 cp -r /wiki_full/graphlab /mnt
+cd /mnt/graphlab
+./configure
+cd release/toolkits/graph_analytics
+make -j8
+cd /mnt
 ~/spark-ec2/copy-dir /mnt/graphlab
 
 ##### UPDATE THE HDFS NAMENODE
