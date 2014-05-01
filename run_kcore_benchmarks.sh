@@ -15,16 +15,15 @@ mkdir -p $OUTPUT_DIR
 
 command=/mnt/graphx/bin/run-example
 class=org.apache.spark.graphx.lib.Analytics
-# DATASET="livejournal_graph_splits/part*"
 GX_DATASET="twitter_graph_splits/part*"
-# DATASET="livejournal_graph"
+# GX_DATASET="ukunion_graph_splits/part*"
 NUMPARTS=128
 
 
 GRAPHX_KCORE_COMMAND="$command $class $SPARK kcore \
   $HDFS/$GX_DATASET \
   --numEPart=$NUMPARTS \
-  --kmax=4 --kmin=1"
+  --kmax=3 --kmin=1"
   # --partStrategy=EdgePartition2D"
 
 GRAPHX_KCORE_FILE=$OUTPUT_DIR/graphx_kcore_results_"$NUMPARTS"parts_$DATE
@@ -57,11 +56,12 @@ do
 done
 
 echo -e "\n\n FINISHED GRAPHX\n\n"
-# exit
+exit
 
 # ######################### GraphLab #######################################
 
 GL_DATASET="twitter_graph_splits"
+# GL_DATASET="ukunion_graph_splits"
 
 NODES=16
 CPUS=8
@@ -70,7 +70,7 @@ GL_KCORE_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES \
     $GRAPHLAB/release/toolkits/graph_analytics/kcore \
     --graph=$HDFS/$GL_DATASET --format=snap --ncpus=$CPUS \
     --graph_opts=ingress=random \
-    --kmin=1 --kmax=4"
+    --kmin=1 --kmax=3"
     # --savecores=$HDFS/kcore_del"
 
 
@@ -97,7 +97,7 @@ GL_KCORE_COMMAND="mpiexec --hostfile /root/spark-ec2/slaves -n $NODES \
     $GRAPHLAB/release/toolkits/graph_analytics/kcore \
     --graph=$HDFS/$GL_DATASET --format=snap --ncpus=$CPUS \
     --graph_opts=ingress=random \
-    --kmin=1 --kmax=4"
+    --kmin=1 --kmax=3"
     # --savecores=$HDFS/kcore_del"
 
 

@@ -10,15 +10,15 @@ NOW=$(date)
 # SECONDS=$(date +%s)
 DATE=`date "+%Y%m%d.%H.%M.%S"`
 # SECONDS=$(date '+%H_%M')
-OUTPUT_DIR=/root/debug_pr_numbers
+OUTPUT_DIR=/root/dataflow_pr_numbers
 mkdir -p $OUTPUT_DIR
 PR_ITERS=20
 
 command=/mnt/graphx/bin/run-example
 class=org.apache.spark.graphx.lib.DataflowPagerank
-GX_DATASET="twitter_graph_splits/part*"
+GX_DATASET="ukunion_graph_splits/part*"
 # GX_DATASET="lj_graph_splits/part*"
-NUMPARTS=128
+NUMPARTS=256
 
 
 PR_COMMAND="$command $class $SPARK \
